@@ -8,6 +8,7 @@ import { runPolicyCommand } from '@/cli/policy/index';
 import { runRuleCommand } from '@/cli/rule/index';
 import { printStatus } from '@/cli/status';
 import { createProcessEnvironment } from '@/core/environment';
+import { ensureSettingsFile } from '@/core/settings';
 import { runGuiCommand } from '@/gui/index';
 
 function handleHelpCommand(args: readonly string[]): boolean {
@@ -64,6 +65,7 @@ const commandHandlers = {
 } satisfies Record<CommandName, (args: string[]) => Promise<void>>;
 
 export async function runCli(args: readonly string[]): Promise<void> {
+  ensureSettingsFile(createProcessEnvironment());
   const globalScan = parseCommandArgs(
     { label: 'cc-safety-net', booleans: { version: ['-V', '--version'] }, positionals: 'list' },
     args,

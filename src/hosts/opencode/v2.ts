@@ -4,6 +4,7 @@ import { Tool } from '@opencode/schema/tool';
 import { Effect } from 'effect';
 import { createProcessEnvironment } from '@/core/environment';
 import { loadBlockPrompts } from '@/core/prompts/block';
+import { ensureSettingsFile } from '@/core/settings';
 import { getNonCommandToolInputKind } from '@/core/tool-input';
 import { loadBuiltinCommands } from './builtin-commands/commands';
 import { evaluateOpenCodeTool, resolveOpenCodeShellRoute } from './plugin';
@@ -26,6 +27,7 @@ export function createOpenCodeV2Plugin() {
     effect: (ctx: V2Context) =>
       Effect.gen(function* () {
         const environment = createProcessEnvironment();
+        ensureSettingsFile(environment);
         const blockPrompts = loadBlockPrompts(environment);
         const shell = ctx.options.shell ?? (process.platform === 'win32' ? 'powershell' : 'posix');
         if (shell !== 'posix' && shell !== 'powershell') {

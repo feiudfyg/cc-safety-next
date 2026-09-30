@@ -11,6 +11,7 @@ import {
 import { createProcessEnvironment } from '@/core/environment';
 import { type BlockPrompts, DEFAULT_BLOCK_PROMPTS, loadBlockPrompts } from '@/core/prompts/block';
 import { shouldRecordAllowedCommands } from '@/core/policy/env';
+import { ensureSettingsFile } from '@/core/settings';
 import {
   getCommandFromToolInput,
   getNonCommandToolInputKind,
@@ -43,6 +44,7 @@ export function createCCSafetyNetPlugin(guardDependencies: Partial<GuardDependen
   return (async ({ directory, homeDir }: CCSafetyNetPluginInput) => {
     const configCwd = resolve(directory);
     const environment = createEnvironment(homeDir);
+    ensureSettingsFile(environment);
     const blockPrompts = loadBlockPrompts(environment);
     let currentConfig: Record<string, unknown> | undefined;
 

@@ -5,7 +5,13 @@ import { join } from 'node:path';
 import { createProcessEnvironment } from '@/core/environment';
 import { DEFAULT_BLOCK_PROMPTS, loadBlockPrompts } from '@/core/prompts/block';
 import { loadPrompt, promptFilePath } from '@/core/prompts/store';
-import { getPluginTempDir, getPromptsDir, loadPluginSettings } from '@/core/settings';
+import {
+  ensureSettingsFile,
+  getPluginTempDir,
+  getPromptsDir,
+  getSettingsPath,
+  loadPluginSettings,
+} from '@/core/settings';
 
 const roots: string[] = [];
 
@@ -22,6 +28,7 @@ function environmentFor(home: string, extra: Record<string, string> = {}) {
       ([name]) =>
         name !== 'CC_SAFETY_NET_HOME' &&
         name !== 'CC_SAFETY_NET_NO_PROMPT_SEED' &&
+        name !== 'CC_SAFETY_NET_NO_SETTINGS_SEED' &&
         name !== 'XDG_CONFIG_HOME' &&
         name !== 'OPENCODE_CONFIG_DIR',
     ),
@@ -41,10 +48,9 @@ afterEach(() => {
 });
 
 describe('plugin settings', () => {
-  test('falls back to the OS temp dir when nothing is configured', () => {
+  test('defaults to the OS temp dir and the config prompts folder', () => {
     const home = createRoot();
     const environment = environmentFor(home);
-    expect(loadPluginSettings(environment)).toStrictEqual({});
     expect(getPluginTempDir(environment)).toBe(environment.tmpdir);
     expect(getPromptsDir(environment)).toBe(join(home, '.cc-safety-net', 'prompts'));
   });
@@ -72,6 +78,33 @@ describe('plugin settings', () => {
     const environment = environmentFor(home);
     expect(loadPluginSettings(environment)).toStrictEqual({});
     expect(getPluginTempDir(environment)).toBe(environment.tmpdir);
+  });
+
+  test('auto-generates settings.json with the defaults', () => {
+    const home = createRoot();
+    const environment = environmentFor(home);
+
+    ensureSettingsFile(environment);
+
+    expect(loadPluginSettings(environment)).toStrictEqual({
+      tempDir: environment.tmpdir,
+      promptsDir: 'prompts',
+    });
+    const written = JSON.parse(readFileSync(getSettingsPath(environment), 'utf-8')) as Record<
+      string,
+      unknown
+    >;
+    expect(written).toStrictEqual({ temp_dir: environment.tmpdir, prompts_dir: 'prompts' });
+  });
+
+  test('does not write settings.json when seeding is disabled', () => {
+    const home = createRoot();
+    const environment = environmentFor(home, { CC_SAFETY_NET_NO_SETTINGS_SEED: '1' });
+
+    ensureSettingsFile(environment);
+
+    expect(loadPluginSettings(environment)).toStrictEqual({});
+    expect(existsSync(getSettingsPath(environment))).toBe(false);
   });
 });
 

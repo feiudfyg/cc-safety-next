@@ -1,11 +1,12 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import type { Environment } from '@/core/environment';
 import { normalizeMsysDrivePath } from '@/core/paths/canonicalization';
 import { getUserSafetyNetHome } from '@/core/policy/paths';
 
 const SETTINGS_FILE = 'settings.json';
 const PROMPTS_DIR = 'prompts';
+const DISABLE_SEED_ENV = 'CC_SAFETY_NET_NO_SETTINGS_SEED';
 
 /** @internal */
 export interface PluginSettings {
@@ -15,6 +16,22 @@ export interface PluginSettings {
 
 export function getSettingsPath(environment: Environment): string {
   return join(getUserSafetyNetHome(environment), SETTINGS_FILE);
+}
+
+function defaultSettings(environment: Environment) {
+  return { temp_dir: environment.tmpdir, prompts_dir: PROMPTS_DIR };
+}
+
+export function ensureSettingsFile(environment: Environment): void {
+  if (environment.env.has(DISABLE_SEED_ENV)) return;
+  const path = getSettingsPath(environment);
+  if (existsSync(path)) return;
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${JSON.stringify(defaultSettings(environment), null, 2)}\n`, 'utf-8');
+  } catch {
+    return;
+  }
 }
 
 function readConfiguredPath(record: Record<string, unknown>, key: string): string | undefined {
