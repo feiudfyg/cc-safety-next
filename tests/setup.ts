@@ -15,6 +15,7 @@ const testHome = mkdtempSync(
 process.env.CC_SAFETY_NET_AUDIT_HOME = join(testHome, 'audit-home');
 process.env.CC_SAFETY_NET_HOME ??= join(testHome, 'safety-net-home');
 process.env.CC_SAFETY_NET_NO_UPDATE_CHECK = '1';
+process.env.CC_SAFETY_NET_NO_PROMPT_SEED = '1';
 process.env.NO_COLOR = '1';
 delete process.env.CLAUDECODE;
 delete process.env.CLAUDE_CODE_ENTRYPOINT;

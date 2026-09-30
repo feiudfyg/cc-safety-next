@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { parseCommandArgs } from '@/cli/args';
 import { ruleAddExamples, ruleAddOptions, ruleCommand } from '@/cli/commands/rule';
 import { printCommandHelp } from '@/cli/help';
-import { RULE_DOC } from '@/cli/rule/doc';
+import { loadRuleDoc } from '@/cli/rule/doc';
 import { printRuleAddResult, printRuleChangeResult, printRulesListReport } from '@/cli/rule/format';
 import { runRulesMigrate } from '@/cli/rule/migrate';
 import { runRuleSyncMigration } from '@/cli/rule/sync-migrate';
@@ -165,7 +165,7 @@ async function runRuleCommandInternal(
   }
 
   if (subcommand === 'doc') {
-    console.log(RULE_DOC);
+    console.log(loadRuleDoc(environment));
     return 0;
   }
 

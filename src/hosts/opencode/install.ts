@@ -59,17 +59,40 @@ function readPluginInventory(output: string | null | undefined): unknown[] {
   }
 }
 
-export function hasOpenCodePlugin(config: unknown) {
+export function hasOpenCodePlugin(config: unknown, resolveLocalPlugin?: LocalPluginResolver) {
   return ['plugin', 'plugins'].some((key) => {
     const plugins = readRecord(config, key);
-    return Array.isArray(plugins) && plugins.some(isManagedPlugin);
+    if (!Array.isArray(plugins)) return false;
+    return plugins.some((plugin) => {
+      if (isManagedPlugin(plugin)) return true;
+      const spec = pluginSpec(plugin);
+      return (
+        resolveLocalPlugin !== undefined &&
+        typeof spec === 'string' &&
+        looksLikePluginPath(spec) &&
+        resolveLocalPlugin(spec)
+      );
+    });
   });
 }
 
+/** @internal */
+export const LOCAL_PACKAGE_NAMES = new Set([OPENCODE_PACKAGE, '@local/cc-safety-net']);
+
+export type LocalPluginResolver = (spec: string) => boolean;
+
+function pluginSpec(plugin: unknown): unknown {
+  return typeof plugin === 'string' ? plugin : readRecord(plugin, 'package');
+}
+
+function looksLikePluginPath(spec: string): boolean {
+  return spec.startsWith('.') || spec.startsWith('~') || /[\\/]/.test(spec);
+}
+
 function isManagedPlugin(plugin: unknown) {
-  const spec = typeof plugin === 'string' ? plugin : readRecord(plugin, 'package');
+  const spec = pluginSpec(plugin);
   return (
     typeof spec === 'string' &&
-    (spec === OPENCODE_PACKAGE || spec.startsWith(`${OPENCODE_PACKAGE}@`))
+    (LOCAL_PACKAGE_NAMES.has(spec) || spec.startsWith(`${OPENCODE_PACKAGE}@`))
   );
 }

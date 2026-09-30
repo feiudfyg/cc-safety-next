@@ -1,13 +1,26 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { stripJsonComments } from '@/core/io/jsonc';
-import type { DetectContext, HookDetection } from '@/hosts/detect/context';
+import { type DetectContext, type HookDetection, readRecord } from '@/hosts/detect/context';
 import {
   findOpenCodePluginFailure,
   getOpenCodeConfigPaths,
   getOpenCodeV2ConfigPaths,
   hasOpenCodePlugin,
+  LOCAL_PACKAGE_NAMES,
 } from '@/hosts/opencode/install';
+
+function resolveLocalPlugin(spec: string, cwd: string, home: string): boolean {
+  const expanded = spec.startsWith('~') ? join(home, spec.slice(1)) : spec;
+  const packagePath = join(resolve(cwd, expanded), 'package.json');
+  if (!existsSync(packagePath)) return false;
+  try {
+    const name = readRecord(JSON.parse(readFileSync(packagePath, 'utf-8')), 'name');
+    return typeof name === 'string' && LOCAL_PACKAGE_NAMES.has(name);
+  } catch {
+    return false;
+  }
+}
 
 export function detect(context: DetectContext): HookDetection {
   const errors: string[] = [];
@@ -20,7 +33,11 @@ export function detect(context: DetectContext): HookDetection {
         const json = stripJsonComments(content);
         const config: unknown = JSON.parse(json);
 
-        if (hasOpenCodePlugin(config)) {
+        if (
+          hasOpenCodePlugin(config, (spec) =>
+            resolveLocalPlugin(spec, context.cwd, context.environment.home),
+          )
+        ) {
           const failure = findOpenCodePluginFailure(context.openCodePluginListOutput);
           if (failure) {
             return {

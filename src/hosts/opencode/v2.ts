@@ -2,6 +2,8 @@ import type { Context, Plugin } from '@opencode/plugin/effect/plugin';
 import type { ToolHooks } from '@opencode/plugin/effect/tool';
 import { Tool } from '@opencode/schema/tool';
 import { Effect } from 'effect';
+import { createProcessEnvironment } from '@/core/environment';
+import { loadBlockPrompts } from '@/core/prompts/block';
 import { getNonCommandToolInputKind } from '@/core/tool-input';
 import { loadBuiltinCommands } from './builtin-commands/commands';
 import { evaluateOpenCodeTool, resolveOpenCodeShellRoute } from './plugin';
@@ -23,6 +25,8 @@ export function createOpenCodeV2Plugin() {
     id: 'cc-safety-net',
     effect: (ctx: V2Context) =>
       Effect.gen(function* () {
+        const environment = createProcessEnvironment();
+        const blockPrompts = loadBlockPrompts(environment);
         const shell = ctx.options.shell ?? (process.platform === 'win32' ? 'powershell' : 'posix');
         if (shell !== 'posix' && shell !== 'powershell') {
           return yield* Effect.die(
@@ -42,6 +46,7 @@ export function createOpenCodeV2Plugin() {
                   event.tool === 'shell'
                     ? { kind: 'command', shell }
                     : { kind: getNonCommandToolInputKind(event.tool) },
+                blockPrompts,
               }),
             catch: (error) =>
               new Tool.Error({ message: error instanceof Error ? error.message : String(error) }),
@@ -59,7 +64,7 @@ export function createOpenCodeV2Plugin() {
         const commands = yield* ctx.command.list().pipe(Effect.orDie);
         if (commands.data.some((command) => command.name === 'cc-safety-net')) return;
         yield* ctx.command.transform((editor) => {
-          const command = loadBuiltinCommands()['cc-safety-net'];
+          const command = loadBuiltinCommands(environment)['cc-safety-net'];
           if (!command) return;
           editor.add({
             name: 'cc-safety-net',

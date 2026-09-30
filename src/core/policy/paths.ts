@@ -62,6 +62,9 @@ function getUserSafetyNetHome(environment: Environment): string {
   return home ? resolve(normalizeMsysDrivePath(home)) : join(environment.home, SAFETY_NET_DIR);
 }
 
+/** @internal */
+export { getUserSafetyNetHome };
+
 export function getUserRulesConfigPath(
   environment: Environment,
   options: UserScopeOptions = {},

@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import type { Environment } from '@/core/environment';
 import type { PolicySnapshot } from '@/core/policy/types';
+import { getPluginTempDir } from '@/core/settings';
 import { createToolInvocation } from '@/gate/invocation';
 import { evaluateRuntimeGuard } from './runtime';
 
@@ -72,7 +73,7 @@ const STANDARD_MODES = {
 };
 
 export function runIntegrationSelfTest(environment: Environment): SelfTestSummary {
-  const cwd = join(environment.tmpdir, 'cc-safety-net-self-test');
+  const cwd = join(getPluginTempDir(environment), 'cc-safety-net-self-test');
   const results = CASES.map((testCase): SelfTestResult => {
     const evaluation = evaluateRuntimeGuard(
       environment,

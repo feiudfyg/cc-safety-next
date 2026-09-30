@@ -1,5 +1,11 @@
 import { REASON_SAFETY_NET_FAILED_CLOSED } from './budget';
 import type { BlockIntent, Decision } from './decision';
+import {
+  type BlockPrompts,
+  type CwdDirectory,
+  type CwdProblem,
+  DEFAULT_BLOCK_PROMPTS,
+} from './prompts/block';
 import { redactSecrets } from './redaction';
 
 /** @internal */
@@ -15,29 +21,18 @@ export interface FormatBlockedMessageInput {
   redact?: (text: string) => string;
   configWarning?: string;
   askUser?: boolean;
+  prompts?: BlockPrompts;
 }
-
-const FOOTERS: Record<BlockIntent, string> = {
-  hard_stop:
-    'Do not retry this operation or attempt any workaround (other tools, flags, or paths). Report the block to the user and continue with the rest of the task.',
-  use_alternative:
-    'Do not retry the blocked form. Continue the task using the safer alternative described above.',
-  scope_down:
-    'Retry with a narrower, explicit target as described above. Escalate to the user if the broad operation is truly required.',
-  manual_only:
-    'If this operation is truly needed, ask the user for explicit permission and have them run the command manually.',
-  stop_and_explain:
-    'Do not brute-force variants. Simplify or restructure the command so it can be analyzed, or report the block to the user.',
-};
 
 /** @internal */
 export function formatBlockedMessage(input: FormatBlockedMessageInput): string {
   const maxLen = input.maxLen ?? 200;
+  const prompts = input.prompts ?? DEFAULT_BLOCK_PROMPTS;
   const redact = input.redact ?? ((text: string) => text);
   const excerpt = (text: string) => (text.length > maxLen ? `${text.slice(0, maxLen)}...` : text);
 
   return [
-    input.askUser ? 'CC Safety Net could not verify this command' : 'BLOCKED by CC Safety Net',
+    input.askUser ? prompts.unverifiedHeader : prompts.blockedHeader,
     `Reason: ${redact(input.reason)}`,
     input.ruleId ? `Rule: ${input.ruleId}` : undefined,
     input.toolName ? `Tool: ${input.toolName}` : undefined,
@@ -49,7 +44,7 @@ export function formatBlockedMessage(input: FormatBlockedMessageInput): string {
     input.configWarning ? `Config warning: ${redact(input.configWarning)}` : undefined,
     input.askUser
       ? 'Approve only if you expected this command.'
-      : FOOTERS[input.intent ?? 'manual_only'],
+      : prompts.footers[input.intent ?? 'manual_only'],
   ]
     .filter((line): line is string => line !== undefined)
     .join('\n\n');
@@ -101,37 +96,21 @@ export function createFailedClosedDenial(
   };
 }
 
-const CWD_DENIALS = {
+const CWD_INTENTS: Record<CwdDirectory, Record<CwdProblem, BlockIntent>> = {
   session: {
-    unusable: {
-      reason:
-        "CC Safety Net cannot check tool calls because the session's working directory or workspace root no longer exists, is inaccessible, is not a directory, or uses an unsupported path form. Ask the user to restart the session from an existing directory.",
-      intent: 'hard_stop',
-    },
-    'outside-workspace': {
-      reason:
-        "CC Safety Net cannot check tool calls because the session's working directory is outside its workspace roots. Ask the user to restart the session from a directory inside the workspace.",
-      intent: 'hard_stop',
-    },
+    unusable: 'hard_stop',
+    'outside-workspace': 'hard_stop',
   },
   requested: {
-    unusable: {
-      reason:
-        'CC Safety Net could not use the requested working directory because it does not exist, is inaccessible, is not a directory, or uses an unsupported path form. Use an existing accessible working directory. If the requested directory is missing, create it from an accessible location before retrying the command.',
-      intent: 'use_alternative',
-    },
-    'outside-workspace': {
-      reason:
-        "CC Safety Net could not use the requested working directory because it is outside the session's workspace. Use a working directory inside the workspace.",
-      intent: 'use_alternative',
-    },
+    unusable: 'use_alternative',
+    'outside-workspace': 'use_alternative',
   },
-} as const satisfies Record<string, Record<string, { reason: string; intent: BlockIntent }>>;
+};
 
-export type CwdProblem = keyof (typeof CWD_DENIALS)['session'];
+export type { CwdDirectory, CwdProblem };
 
 export type CwdDenial = {
-  directory: keyof typeof CWD_DENIALS;
+  directory: CwdDirectory;
   problem: CwdProblem;
   cwd: string;
 };
@@ -139,21 +118,29 @@ export type CwdDenial = {
 export function createCwdDenial(
   cause: CwdDenial,
   options: Pick<IntegrationDenial, 'command' | 'toolName'> = {},
+  prompts: BlockPrompts = DEFAULT_BLOCK_PROMPTS,
 ): IntegrationDenial {
   return {
-    ...CWD_DENIALS[cause.directory][cause.problem],
+    reason: prompts.cwdReasons[cause.directory][cause.problem],
+    intent: CWD_INTENTS[cause.directory][cause.problem],
     command: options.command,
     toolName: options.toolName,
     cwd: cause.cwd,
   };
 }
 
-export function formatDenial(denial: IntegrationDenial): string {
-  return formatBlockedMessage({ ...denial, redact: redactSecrets });
+export function formatDenial(
+  denial: IntegrationDenial,
+  prompts: BlockPrompts = DEFAULT_BLOCK_PROMPTS,
+): string {
+  return formatBlockedMessage({ ...denial, redact: redactSecrets, prompts });
 }
 
-export function formatAskPrompt(denial: IntegrationDenial): string {
-  return formatBlockedMessage({ ...denial, redact: redactSecrets, askUser: true });
+export function formatAskPrompt(
+  denial: IntegrationDenial,
+  prompts: BlockPrompts = DEFAULT_BLOCK_PROMPTS,
+): string {
+  return formatBlockedMessage({ ...denial, redact: redactSecrets, askUser: true, prompts });
 }
 
 export function formatIntegrationError(cause: unknown): string {

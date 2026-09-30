@@ -1,3 +1,6 @@
+import type { Environment } from '@/core/environment';
+import { loadPrompt } from '@/core/prompts/store';
+
 export const RULE_DOC = `# Custom Rules Reference
 
 Agent reference for generating CC Safety Net rulebook configuration.
@@ -185,3 +188,7 @@ The subcommand, argument, and option rules below describe \`rulebook_version\` 1
 
 A missing or invalid rulebook file makes that source inactive, and an unreadable or invalid \`rule.json\` makes every source in its scope inactive. Inactive sources stop applying their rules while other custom rules and all built-in protections stay active. Fix the file named in the diagnostic, or run \`cc-safety-net rule update\` when a remote source has not been vendored yet. Run \`cc-safety-net status\` to see degraded sources.
 `;
+
+export function loadRuleDoc(environment: Environment): string {
+  return loadPrompt(environment, 'rule-doc', RULE_DOC);
+}

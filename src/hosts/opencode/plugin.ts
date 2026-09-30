@@ -9,6 +9,7 @@ import {
   projectGuardDenial,
 } from '@/core/denial';
 import { createProcessEnvironment } from '@/core/environment';
+import { type BlockPrompts, DEFAULT_BLOCK_PROMPTS, loadBlockPrompts } from '@/core/prompts/block';
 import { shouldRecordAllowedCommands } from '@/core/policy/env';
 import {
   getCommandFromToolInput,
@@ -41,12 +42,14 @@ const POSIX_EXECUTABLES = new Set(['bash', 'dash', 'ksh', 'sh', 'zsh']);
 export function createCCSafetyNetPlugin(guardDependencies: Partial<GuardDependencies> = {}) {
   return (async ({ directory, homeDir }: CCSafetyNetPluginInput) => {
     const configCwd = resolve(directory);
+    const environment = createEnvironment(homeDir);
+    const blockPrompts = loadBlockPrompts(environment);
     let currentConfig: Record<string, unknown> | undefined;
 
     return {
       config: async (opencodeConfig: Record<string, unknown>) => {
         currentConfig = opencodeConfig;
-        const builtinCommands = loadBuiltinCommands();
+        const builtinCommands = loadBuiltinCommands(environment);
         const existingCommands = (opencodeConfig.command as Record<string, unknown>) ?? {};
 
         opencodeConfig.command = {
@@ -63,11 +66,18 @@ export function createCCSafetyNetPlugin(guardDependencies: Partial<GuardDependen
           sessionID: input.sessionID,
           toolInput: output.args,
           route: getOpenCodeToolRoute(input.tool, resolveOpenCodeShellRoute(currentConfig?.shell)),
+          blockPrompts,
           guardDependencies,
         });
       },
     };
   }) satisfies Plugin;
+}
+
+function createEnvironment(homeDir: string | undefined) {
+  return homeDir === undefined
+    ? createProcessEnvironment()
+    : { ...createProcessEnvironment(), home: homeDir };
 }
 
 export function evaluateOpenCodeTool({
@@ -78,6 +88,7 @@ export function evaluateOpenCodeTool({
   sessionID,
   toolInput,
   route,
+  blockPrompts = DEFAULT_BLOCK_PROMPTS,
   guardDependencies = {},
 }: {
   configCwd: string;
@@ -87,12 +98,10 @@ export function evaluateOpenCodeTool({
   sessionID: string;
   toolInput: unknown;
   route: ToolRoute;
+  blockPrompts?: BlockPrompts;
   guardDependencies?: Partial<GuardDependencies>;
 }): void {
-  const environment =
-    homeDir === undefined
-      ? createProcessEnvironment()
-      : { ...createProcessEnvironment(), home: homeDir };
+  const environment = createEnvironment(homeDir);
   const throwPreflightDenial = (
     denial: IntegrationDenial,
     toolName?: string,
@@ -103,7 +112,7 @@ export function evaluateOpenCodeTool({
       toolName,
       cwd,
     });
-    throwBlocked(denial);
+    throwBlocked(denial, blockPrompts);
   };
   if (typeof tool !== 'string' || tool.trim() === '') {
     throwPreflightDenial(createFailedClosedDenial());
@@ -156,7 +165,7 @@ export function evaluateOpenCodeTool({
         getSessionId: () => sessionID,
       },
     });
-    throwGuardDenial(evaluation);
+    throwGuardDenial(evaluation, blockPrompts);
   } catch (error) {
     if (!(error instanceof GuardEvaluationError)) throw error;
     if (
@@ -166,7 +175,7 @@ export function evaluateOpenCodeTool({
     ) {
       throw error.cause;
     }
-    throwGuardDenial(error.evaluation);
+    throwGuardDenial(error.evaluation, blockPrompts);
     return;
   }
 }
@@ -237,11 +246,11 @@ export function normalizeOpenCodeWindowsWorkdir(workdir: string): string {
   return normalized;
 }
 
-function throwGuardDenial(evaluation: GuardEvaluation): void {
+function throwGuardDenial(evaluation: GuardEvaluation, prompts: BlockPrompts): void {
   const denial = projectGuardDenial(evaluation, { includeEvidence: true });
-  if (denial) throwBlocked(denial);
+  if (denial) throwBlocked(denial, prompts);
 }
 
-function throwBlocked(denial: IntegrationDenial): never {
-  throw new Error(formatDenial(denial));
+function throwBlocked(denial: IntegrationDenial, prompts: BlockPrompts): never {
+  throw new Error(formatDenial(denial, prompts));
 }
