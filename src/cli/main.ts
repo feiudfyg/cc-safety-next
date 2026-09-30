@@ -4,11 +4,9 @@ import { type CommandName, findCommand } from '@/cli/commands/index';
 import { parseDoctorFlags, runDoctor } from '@/cli/doctor/index';
 import { runExplain } from '@/cli/explain/run';
 import { printHelp, printVersion, showCommandHelp } from '@/cli/help';
-import { runInstallCommand, runUpdateCommand } from '@/cli/install/index';
 import { runPolicyCommand } from '@/cli/policy/index';
 import { runRuleCommand } from '@/cli/rule/index';
 import { printStatus } from '@/cli/status';
-import { printStatusline } from '@/cli/statusline';
 import { createProcessEnvironment } from '@/core/environment';
 import { runGuiCommand } from '@/gui/index';
 
@@ -33,22 +31,6 @@ function handleHelpCommand(args: readonly string[]): boolean {
 }
 
 const commandHandlers = {
-  hook: async () => {
-    console.error(
-      'hook requires exactly one integration flag. Try: cc-safety-net hook --kimi-code',
-    );
-    showCommandHelp('hook', console.error);
-    process.exit(1);
-  },
-  install: async (args) => {
-    process.exit(await runInstallCommand('install', args));
-  },
-  update: async (args) => {
-    process.exit(await runUpdateCommand(args));
-  },
-  uninstall: async (args) => {
-    process.exit(await runInstallCommand('uninstall', args));
-  },
   rule: async (args) => {
     process.exit(await runRuleCommand(createProcessEnvironment(), args));
   },
@@ -60,20 +42,6 @@ const commandHandlers = {
       process.exit(1);
     }
     printStatus(createProcessEnvironment());
-  },
-  statusline: async (args) => {
-    const parsed = parseCommandArgs(
-      { label: 'statusline', booleans: { claudeCode: ['-cc', '--claude-code'] } },
-      args,
-    );
-    if (parsed.errors.length === 0 && parsed.flags.claudeCode) {
-      await printStatusline(createProcessEnvironment());
-      return;
-    }
-    reportCommandArgErrors(parsed.errors);
-    if (!parsed.flags.claudeCode) console.error('statusline requires --claude-code (-cc)');
-    showCommandHelp('statusline', console.error);
-    process.exit(1);
   },
   doctor: async (args) => {
     const flags = parseDoctorFlags(args);
@@ -121,11 +89,6 @@ export async function runCli(args: readonly string[]): Promise<void> {
 
   if (command) {
     await commandHandlers[command.name](args.slice(1));
-    return;
-  }
-
-  if (commandName === '--statusline') {
-    await printStatusline(createProcessEnvironment());
     return;
   }
 

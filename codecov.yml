@@ -1,8 +1,0 @@
-coverage:
-  status:
-    project:
-      default:
-        informational: true # bun test enforces 90% floor
-    patch:
-      default:
-        informational: true # bun test enforces 90% floor

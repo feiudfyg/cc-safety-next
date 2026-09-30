@@ -2,11 +2,9 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { Writable } from 'node:stream';
 import { parseCommandArgs } from '@/cli/args';
 import { getActivitySummary } from '@/cli/doctor/activity';
 import { checkForUpdates } from '@/cli/doctor/updates';
-import { type RunInstallCommandOptions, runInstallCommand } from '@/cli/install/index';
 import { createProcessEnvironment, type Environment } from '@/core/environment';
 import {
   bindPolicyFilesystemScope,
@@ -49,7 +47,6 @@ import { type ExplainResult, explainCommand } from '@/gate/explain';
 import { getIntegrationDisplayName, installIntegrationMetadata } from '@/hosts/catalog';
 import { detectAllHooks } from '@/hosts/detect/index';
 import type { SystemInfo, UpdateInfo } from '@/hosts/doctor-types';
-import { INSTALL_TARGETS, type InstallAction, type InstallTarget } from '@/hosts/install/targets';
 import { detect as detectOpenCode } from '@/hosts/opencode/detect';
 import { getPackageVersion, getSystemInfo, type VersionFetcher } from '@/hosts/system-info';
 import { getActivityFeed } from './activity';
@@ -71,7 +68,7 @@ export interface StarContext {
 
 interface IntegrationsStatus {
   targets: {
-    target: InstallTarget;
+    target: string;
     label: string;
     version: string | null;
     status: 'active' | 'disabled' | 'not-installed' | 'not-inspected';
@@ -107,10 +104,6 @@ interface PolicyGuiServerOptions extends Partial<RulesPolicyOptions> {
   fetchStarContext?: () => Promise<StarContext>;
   fetchIntegrations?: () => Promise<IntegrationsStatus>;
   fetchHealth?: () => Promise<HealthStatus>;
-  runIntegration?: (
-    action: InstallAction,
-    target: InstallTarget,
-  ) => Promise<{ ok: boolean; output: string }>;
   activityLogsDir?: string;
 }
 
@@ -429,29 +422,6 @@ async function handleRequest(
     return;
   }
 
-  if (
-    request.method === 'POST' &&
-    (url.pathname === '/api/install' || url.pathname === '/api/uninstall')
-  ) {
-    const body = await readJsonBody(request);
-    if (!body.ok) {
-      sendJson(response, body.status, { errors: [body.error] });
-      return;
-    }
-    const target = (body.value as { target?: unknown } | null)?.target;
-    if (typeof target !== 'string' || !INSTALL_TARGETS.some((entry) => entry.target === target)) {
-      sendJson(response, 400, { error: 'unknown target' });
-      return;
-    }
-    const action = url.pathname === '/api/install' ? 'install' : 'uninstall';
-    sendJson(
-      response,
-      200,
-      await (options.runIntegration ?? runIntegration)(action, target as InstallTarget),
-    );
-    return;
-  }
-
   sendJson(response, 404, { error: 'Not found' });
 }
 
@@ -701,9 +671,6 @@ export async function fetchIntegrations(
 
 function detectHooksFromSystemInfo(environment: Environment, systemInfo: SystemInfo) {
   return detectAllHooks(environment, process.cwd(), {
-    ampPluginListOutput: systemInfo.ampPluginListOutput,
-    codexPluginListOutput: systemInfo.codexPluginListOutput,
-    copilotCliVersion: systemInfo.versions['copilot-cli'],
     openCodeVersion: systemInfo.versions.opencode,
     openCodePluginListOutput: systemInfo.openCodePluginListOutput,
   });
@@ -720,45 +687,6 @@ export async function fetchHealth(
       updateAvailable: update.updateAvailable,
     },
   };
-}
-
-let integrationActionQueue: Promise<unknown> = Promise.resolve();
-
-/** @internal */
-export function runIntegration(
-  action: InstallAction,
-  target: InstallTarget,
-  overrides: RunInstallCommandOptions = {},
-): Promise<{ ok: boolean; output: string }> {
-  const run = async () => {
-    const lines: string[] = [];
-    const originalLog = console.log;
-    const originalError = console.error;
-    console.log = (...args: unknown[]) => lines.push(args.map(String).join(' '));
-    console.error = console.log;
-    try {
-      const exitCode = await runInstallCommand(action, [], {
-        selectTargets: async () => [target],
-        output: new Writable({
-          write(chunk, _encoding, callback) {
-            lines.push(String(chunk).replace(/\n$/, ''));
-            callback();
-          },
-        }) as unknown as NodeJS.WriteStream,
-        ...overrides,
-      });
-      return { ok: exitCode === 0, output: lines.join('\n') };
-    } finally {
-      console.log = originalLog;
-      console.error = originalError;
-    }
-  };
-  const result = integrationActionQueue.then(run);
-  integrationActionQueue = result.then(
-    () => undefined,
-    () => undefined,
-  );
-  return result;
 }
 
 /** @internal */

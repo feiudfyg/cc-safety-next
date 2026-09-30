@@ -1,14 +1,6 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { isBuiltin } from 'node:module';
 import { posix, relative, resolve } from 'node:path';
-import pkg from '../package.json';
-import { AMP_MANAGED_HEADER, AMP_PLUGIN_ENTRY } from '../src/hosts/amp/artifact';
-import {
-  OPENCLAW_MANAGED_HEADER,
-  OPENCLAW_PLUGIN_ENTRY_FILE,
-  OPENCLAW_PLUGIN_ID,
-  OPENCLAW_PLUGIN_MANIFEST_FILE,
-} from '../src/hosts/openclaw/artifact';
 
 function isBuildChunkArtifact(path: string): boolean {
   return /^dist\/chunks\/[A-Za-z0-9_-]+\.js$/.test(path);
@@ -55,14 +47,7 @@ function getSharedChunkImports(path: string, source: string): string[] {
 }
 
 export async function verifyBuildArtifacts(): Promise<string[]> {
-  const ampArtifact = `dist/amp/${AMP_PLUGIN_ENTRY}`;
-  const openClawPluginDir = `dist/openclaw/${OPENCLAW_PLUGIN_ID}`;
-  const openClawArtifact = `${openClawPluginDir}/${OPENCLAW_PLUGIN_ENTRY_FILE}`;
   const buildEntryArtifacts = [
-    ampArtifact,
-    openClawArtifact,
-    `${openClawPluginDir}/${OPENCLAW_PLUGIN_MANIFEST_FILE}`,
-    `${openClawPluginDir}/package.json`,
     'dist/api.d.ts',
     'dist/api.js',
     'dist/bin/cc-safety-net.js',
@@ -72,7 +57,6 @@ export async function verifyBuildArtifacts(): Promise<string[]> {
     'dist/index.d.ts',
     'dist/opencode-v2.d.ts',
     'dist/index.js',
-    'dist/pi/index.js',
   ];
   const files = await listFiles(resolve('dist'));
   const unexpected = files.filter(
@@ -123,25 +107,5 @@ export async function verifyBuildArtifacts(): Promise<string[]> {
   if (!(await readFile('dist/bin/cc-safety-net.js', 'utf8')).startsWith('#!/usr/bin/env node\n')) {
     throw new Error('dist/bin/cc-safety-net.js has the wrong shebang');
   }
-  verifyManagedArtifact('Amp', AMP_MANAGED_HEADER, await readFile(ampArtifact, 'utf8'));
-  verifyManagedArtifact(
-    'OpenClaw',
-    OPENCLAW_MANAGED_HEADER,
-    await readFile(openClawArtifact, 'utf8'),
-  );
   return files;
-}
-
-/** @internal */
-export function verifyManagedArtifact(label: string, header: string, source: string): void {
-  if (!source.startsWith(header)) {
-    throw new Error(`${label} artifact is missing the managed-file header`);
-  }
-  if (!source.includes(`// version: ${pkg.version}`)) {
-    throw new Error(`${label} artifact is missing the package version ${pkg.version}`);
-  }
-  const unresolved = unbundledRuntimeImports(source);
-  if (unresolved.length > 0) {
-    throw new Error(`${label} artifact has unresolved runtime imports:\n${unresolved.join('\n')}`);
-  }
 }

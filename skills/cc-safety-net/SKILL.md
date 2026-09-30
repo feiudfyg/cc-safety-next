@@ -6,9 +6,9 @@ disable-model-invocation: true
 
 # CC Safety Net
 
-CC Safety Net hooks into coding agent CLIs (Claude Code, Codex, Cursor, Gemini CLI, and others)
-and blocks destructive commands and secret access before they run. The `cc-safety-net` CLI
-inspects and controls that protection. Run it as `npx -y cc-safety-net`.
+CC Safety Net runs as an OpenCode plugin and blocks destructive commands and secret access
+before they run. The `cc-safety-net` CLI inspects and controls that protection. Run it as
+`npx -y cc-safety-net`.
 
 ## Learn the current CLI
 
@@ -51,7 +51,7 @@ those only as part of a workflow below.
 - The user wants to add, edit, disable, or migrate blocking rules: configure rules.
 - The user wants to change the safety level, toggle a protection, or adjust path lists: configure
   the policy.
-- The user wants CC Safety Net installed into or removed from an agent CLI: manage integrations.
+- The user wants the OpenCode plugin checked or configured: manage the integration.
 - A rule does not fire, or the user asks whether protection is working: diagnose.
 - The user asks how or why the analyzer behaves a certain way, beyond what `explain` and
   `rule doc` show: answer from the source.
@@ -204,24 +204,21 @@ error, so validate against it rather than guessing further fields):
 5. Once the user confirms they applied it, run `npx -y cc-safety-net status` and report the
    effective policy, including any project scope deltas it prints.
 
-## Manage integrations
+## Manage the integration
 
-1. Run `npx -y cc-safety-net doctor` first. It reports each supported platform as detected,
-   configured, and verified, and names outdated installs with the exact repair command.
-2. Install with an explicit target flag, such as `npx -y cc-safety-net install --claude-code`.
-   Run `npx -y cc-safety-net help install` for the full target list. Bare `install` opens an
-   interactive picker; leave that for the user's own terminal.
-3. Run `npx -y cc-safety-net@latest update` to update every installed integration at once.
-4. Uninstall only when the user explicitly asks to remove protection, with the matching target
-   flag.
-5. After any install, update, or uninstall, run `doctor` again and confirm the affected platform
-   rows read as verified.
+1. Run `npx -y cc-safety-net doctor` first. It reports the OpenCode plugin as detected,
+   configured, and verified.
+2. The plugin loads from the `plugin` array in `opencode.json`/`opencode.jsonc`. This build is
+   installed from a local path or a private package; there is no `install`, `update`, or
+   `uninstall` command and no network update check.
+3. After any change to the OpenCode config, run `doctor` again and confirm the OpenCode row reads
+   as verified.
 
 ## Diagnose
 
 1. `npx -y cc-safety-net status` shows what the runtime enforces right now, including a degraded
    `policy.json` that `rule list` does not report.
-2. `npx -y cc-safety-net doctor` verifies the installation: platform detection and hook config,
+2. `npx -y cc-safety-net doctor` verifies the installation: plugin detection and config,
    a synthetic guard self-test, and configuration scopes. Use `--json` when parsing the result.
 3. When a custom rule does not fire, run in order: `rule verify`, `rule list`, then re-test the
    command with `explain`.
@@ -241,24 +238,17 @@ version.
    the candidate as unavailable and continue to the next step.
 3. If no matching local root exists, the source is not available locally. Do not fetch it from
    the network; answer from CLI output and say that the source was unavailable.
-4. Read `docs/` first; `residual-risk.md` and `secret-protection-known-limitations.md` exist to
-   answer whether something is a known gap. For behavior questions, continue into
-   `src/analyzer`, `src/guards`, and `src/rules`.
+4. For behavior questions, read `src/` directly (for example `src/gate/analyzer`,
+   `src/gate/guards`, and `src/core/rules`).
 5. State in the answer which version the source came from. Treat the located source as
    read-only reference; do not edit, build, or run it.
-6. Remove a temporary checkout after the source inspection: `rm -rf -- "<source_dir>"`.
 
 ## Safety rules
 
 - Help the user operate CC Safety Net, never evade it. Do not change levels, uninstall, edit
   config, or propose a policy that weakens protection to get a blocked command through unless the
   user explicitly asks for that outcome and understands what the block guards against.
-- Never run `hook`; it is the integration entry point that reads hook JSON from stdin, not a
-  user-facing command.
 - `logs --prune-legacy` permanently deletes legacy logs. Run it only on an explicit request, and
   run it with `--dry-run` first.
 - `rule remove --delete-source` deletes the local source directory. Ask before using it.
 - Prefer `gui --no-open` and give the user the URL instead of opening a browser from a session.
-- If a command prints an `UPDATE_AVAILABLE:` line, ask the user once whether to run
-  `npx -y cc-safety-net@latest update`, continue the workflow without waiting either way, and do
-  not raise it again.

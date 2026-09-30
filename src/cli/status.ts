@@ -1,6 +1,5 @@
 import { sep } from 'node:path';
 import { wrapReason } from '@/cli/explain/format-helpers';
-import { isPluginEnabled } from '@/cli/statusline';
 import { colors } from '@/cli/utils/colors';
 import type { Environment } from '@/core/environment';
 import { resolveEffectiveDestructiveCommandRules } from '@/core/policy/effective-rules';
@@ -38,14 +37,7 @@ export function printStatus(environment: Environment): void {
 
   const weakenings = snapshot.policyScopes?.weakenings ?? [];
 
-  const issues = [
-    ...(isPluginEnabled(environment)
-      ? []
-      : [
-          'plugin cc-safety-net@cc-marketplace is disabled in Claude Code; nothing is enforced in Claude Code until it is re-enabled. Other integrations are not affected.',
-        ]),
-    ...snapshot.diagnostics,
-  ];
+  const issues = [...snapshot.diagnostics];
   const bullet = asciiOnly ? '-' : '·';
 
   console.log(

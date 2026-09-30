@@ -1,13 +1,10 @@
 import { doctorCommand } from './doctor';
 import { explainCommand } from './explain';
 import { guiCommand } from './gui';
-import { hookCommand } from './hook';
-import { installCommand, uninstallCommand, updateCommand } from './install';
 import { logsCommand } from './logs';
 import { policyCommand } from './policy';
 import { ruleCommand } from './rule';
 import { statusCommand } from './status';
-import { statuslineCommand } from './statusline';
 import type { Command } from './types';
 
 export type { Command } from './types';
@@ -19,12 +16,7 @@ export const commands = [
   explainCommand,
   ruleCommand,
   policyCommand,
-  installCommand,
-  updateCommand,
-  uninstallCommand,
-  hookCommand,
   guiCommand,
-  statuslineCommand,
 ] as const satisfies readonly Command[];
 
 export type CommandName = (typeof commands)[number]['name'];

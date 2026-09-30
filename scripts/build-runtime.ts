@@ -1,14 +1,7 @@
 import { mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { BunPlugin } from 'bun';
 import pkg from '../package.json';
-import { AMP_PLUGIN_ENTRY, buildAmpArtifactHeader } from '../src/hosts/amp/artifact';
-import {
-  buildOpenClawArtifactHeader,
-  buildOpenClawPluginManifests,
-  OPENCLAW_PLUGIN_ENTRY_FILE,
-  OPENCLAW_PLUGIN_ID,
-} from '../src/hosts/openclaw/artifact';
 import { freezeGuiAssetsPlugin, freezeSkillTemplatePlugin } from './gui-assets';
 
 // Bun 1.4.0 intermittently drops the tsconfig `@/*` mapping inside `bun test` (f9671a17).
@@ -23,12 +16,7 @@ const aliasPlugin: BunPlugin = {
 
 export async function buildRuntimeBundles(outdir: string) {
   const result = await Bun.build({
-    entrypoints: [
-      'src/entries/index.ts',
-      'src/entries/api.ts',
-      'src/entries/cli.ts',
-      'src/entries/pi/index.ts',
-    ],
+    entrypoints: ['src/entries/index.ts', 'src/entries/api.ts', 'src/entries/cli.ts'],
     outdir,
     target: 'node',
     splitting: true,
@@ -101,53 +89,5 @@ async function buildBinBundle(outdir: string) {
     Bun.write(join(directory, 'package.json'), `${JSON.stringify({ type: 'commonjs' })}\n`),
     Bun.write(join(directory, 'cc-safety-net.js'), BIN_COMPILE_CACHE_LOADER),
   ]);
-  return result;
-}
-
-export async function buildAmpBundle(outdir: string) {
-  const result = await Bun.build({
-    entrypoints: ['src/entries/amp.ts'],
-    target: 'bun',
-    splitting: false,
-    minify: true,
-    define: {
-      __PKG_VERSION__: JSON.stringify(pkg.version),
-    },
-    plugins: [aliasPlugin],
-  });
-  if (!result.success) return result;
-  const artifact = result.outputs[0];
-  if (!artifact) throw new Error('Amp bundle produced no output');
-  const destination = join(outdir, 'amp', AMP_PLUGIN_ENTRY);
-  mkdirSync(dirname(destination), { recursive: true });
-  await Bun.write(destination, buildAmpArtifactHeader(pkg.version) + (await artifact.text()));
-  return result;
-}
-
-export async function buildOpenClawBundle(outdir: string) {
-  const result = await Bun.build({
-    entrypoints: ['src/entries/openclaw.ts'],
-    target: 'node',
-    splitting: false,
-    minify: true,
-    define: {
-      __PKG_VERSION__: JSON.stringify(pkg.version),
-    },
-    plugins: [aliasPlugin],
-  });
-  if (!result.success) return result;
-  const artifact = result.outputs[0];
-  if (!artifact) throw new Error('OpenClaw bundle produced no output');
-  const directory = join(outdir, 'openclaw', OPENCLAW_PLUGIN_ID);
-  mkdirSync(directory, { recursive: true });
-  await Bun.write(
-    join(directory, OPENCLAW_PLUGIN_ENTRY_FILE),
-    buildOpenClawArtifactHeader(pkg.version) + (await artifact.text()),
-  );
-  await Promise.all(
-    buildOpenClawPluginManifests(pkg.version).map((file) =>
-      Bun.write(join(directory, file.name), file.content),
-    ),
-  );
   return result;
 }

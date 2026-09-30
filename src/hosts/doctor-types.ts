@@ -35,10 +35,6 @@ export interface SystemInfo {
 
   versions: Partial<Record<IntegrationId, string | null>>;
 
-  codexPluginListOutput: string | null;
-
-  ampPluginListOutput: string | null;
-
   openCodePluginListOutput: string | null;
 
   nodeVersion: string | null;

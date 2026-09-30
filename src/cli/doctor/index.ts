@@ -16,7 +16,6 @@ import {
 } from '@/cli/doctor/format';
 import { getDoctorPosture } from '@/cli/doctor/posture';
 import { checkForUpdates } from '@/cli/doctor/updates';
-import { printInstallBanner } from '@/cli/install/banner';
 import { findRuleV2Leftovers } from '@/cli/rule/sync-migrate';
 import { resolveAfterOptionalBanner } from '@/cli/startup/banner';
 import type { Environment } from '@/core/environment';
@@ -44,7 +43,7 @@ export async function runDoctor(
         finish: () => reportPromise,
       };
     },
-    () => printInstallBanner(),
+    async () => {},
     { loadingMessage: 'Checking system status…' },
   );
 
@@ -72,9 +71,6 @@ async function collectDoctorReport(
     cwd,
   );
   const hooks = detectAllHooks(environment, cwd, {
-    ampPluginListOutput: system.ampPluginListOutput,
-    codexPluginListOutput: system.codexPluginListOutput,
-    copilotCliVersion: system.versions['copilot-cli'],
     openCodeVersion: system.versions.opencode,
     openCodePluginListOutput: system.openCodePluginListOutput,
   });

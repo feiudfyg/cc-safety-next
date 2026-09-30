@@ -30,14 +30,10 @@ const runStatus = (row: Omit<CliRow, 'args'>) =>
   });
 
 describe('status', () => {
-  test('a fresh home reports the disabled plugin and points at doctor', async () => {
+  test('a fresh home reports everything active', async () => {
     const outcome = await runStatus({});
     expect(outcome.exitCode).toBe(0);
-    expect(outcome.stdout).toContain('  Not active');
-    expect(outcome.stdout).toContain(
-      'plugin cc-safety-net@cc-marketplace is disabled in Claude Code',
-    );
-    expect(outcome.stdout).toContain('  Full report: cc-safety-net doctor');
+    expect(outcome.stdout).toContain('  Everything configured is active.');
     expect(outcome).toEqual(runCliDifferential(statusRow({})));
   }, 60_000);
 

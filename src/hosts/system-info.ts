@@ -170,15 +170,7 @@ export async function getSystemInfo(
         [integration.id, parseVersion(await fetcher([...integration.probeCommand]))] as const,
     ),
   );
-  const [
-    versionEntries,
-    openCodePluginListOutput,
-    codexPluginListOutput,
-    ampPluginListOutput,
-    nodeRaw,
-    npmRaw,
-    bunRaw,
-  ] = await Promise.all([
+  const [versionEntries, openCodePluginListOutput, nodeRaw, npmRaw, bunRaw] = await Promise.all([
     versionProbes,
     versionProbes.then(async (entries) => {
       const openCodeVersion = entries.find(([id]) => id === 'opencode')?.[1];
@@ -188,8 +180,6 @@ export async function getSystemInfo(
       await fetcher(awaitPluginActivation, 30_000);
       return fetcher(['opencode', 'api', 'plugin.list', ...location], 30_000);
     }),
-    fetcher(['codex', 'plugin', 'list'], 30_000),
-    fetcher(['amp', 'plugins', 'list'], 30_000),
     fetcher(['node', '--version']),
     fetcher(['npm', '--version']),
     fetcher(['bun', '--version']),
@@ -198,8 +188,6 @@ export async function getSystemInfo(
   return {
     version: CURRENT_VERSION,
     versions: Object.fromEntries(versionEntries),
-    codexPluginListOutput,
-    ampPluginListOutput,
     openCodePluginListOutput,
     nodeVersion: parseVersion(nodeRaw),
     npmVersion: parseVersion(npmRaw),

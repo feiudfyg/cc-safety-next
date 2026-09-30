@@ -17,9 +17,6 @@ export interface HookDetection {
 export interface DetectContext {
   environment: Environment;
   cwd: string;
-  ampPluginListOutput?: string | null;
-  codexPluginListOutput?: string | null;
-  copilotCliVersion?: string | null;
   openCodeVersion?: string | null;
   openCodePluginListOutput?: string | null;
 }

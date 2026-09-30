@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { installIntegrationMetadata } from '@/hosts/catalog';
 import {
   defaultVersionFetcher,
   getPackageVersion,
@@ -20,8 +19,6 @@ const SCRIPT: readonly FakeScriptEntry[] = [
   { command: 'broken', args: ['--version'], stdout: 'v9.9.9\n', exit: 1 },
   { command: 'stalled', args: ['--version'], delayMs: 2000 },
 ];
-
-const FETCHED_OUTPUTS = ['Claude Code 1.2.3', 'v2.0.0-beta.1', 'no digits\nsecond', null];
 
 afterEach(removeTempRoots);
 
@@ -80,33 +77,6 @@ describe('the default version probe', () => {
 });
 
 describe('the system report', () => {
-  test('probes every host once and parses whatever each one printed', async () => {
-    const record = async (report: typeof getSystemInfo) => {
-      const calls: { args: string[]; timeoutMs: number | undefined }[] = [];
-      const info = await report(
-        () => true,
-        async (args, timeoutMs) => {
-          calls.push({ args, timeoutMs });
-          return FETCHED_OUTPUTS[calls.length % FETCHED_OUTPUTS.length] ?? null;
-        },
-      );
-      return { calls, info };
-    };
-    const ported = await record(getSystemInfo);
-    expect(Object.keys(ported.info.versions)).toEqual(
-      installIntegrationMetadata.map((integration) => integration.id),
-    );
-    expect(ported.calls.filter((call) => call.timeoutMs !== undefined)).toEqual([
-      { args: ['codex', 'plugin', 'list'], timeoutMs: 30_000 },
-      { args: ['amp', 'plugins', 'list'], timeoutMs: 30_000 },
-    ]);
-    expect(new Set(Object.values(ported.info.versions))).toEqual(
-      new Set(['1.2.3', '2.0.0-beta.1', 'no digits', null]),
-    );
-    expect(ported.info.version).toBe('dev');
-    expect(ported.info.platform).toBe(`${process.platform} ${process.arch}`);
-  });
-
   test.each([
     [
       '2.0.19 with a cc-safety-net entry',
