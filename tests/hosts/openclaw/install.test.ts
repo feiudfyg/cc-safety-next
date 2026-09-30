@@ -1,0 +1,358 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+import { join } from 'node:path';
+import {
+  buildOpenClawArtifactHeader,
+  OPENCLAW_PLUGIN_ENTRY_FILE,
+  OPENCLAW_PLUGIN_MANIFEST_FILE,
+  OPENCLAW_PLUGIN_PACKAGE_FILE,
+} from '@/hosts/openclaw/artifact';
+import {
+  assertOpenClawPluginDirIsOurs,
+  findOpenClawArtifactDir,
+  getOpenClawConfigPath,
+  getOpenClawInstallCommands,
+  getOpenClawPluginDir,
+  openClawArtifactCandidates,
+  resolveOpenClawArtifactDir,
+  verifyOpenClawPluginRuntime,
+} from '@/hosts/openclaw/install';
+import { createFakeBin, type FakeScriptEntry } from '../../helpers/fake-bin';
+import { describeOutcome, type TreeSpec } from '../../helpers/fixture-tree';
+import { differential } from '../../helpers/host-differential';
+import {
+  createTempRoot,
+  describeAsyncOutcome,
+  removeTempRoots,
+  withProcessEnv,
+} from '../../helpers/temp-home';
+
+const PLUGIN_DIR = '.openclaw/extensions/cc-safety-net';
+const REFUSAL = `Refusing to modify <home>/${PLUGIN_DIR}: it does not hold a cc-safety-net managed OpenClaw plugin. Move or remove it, then run the command again.`;
+const REPO_ROOT = join(import.meta.dir, '..', '..', '..');
+const INSPECT_ARGS = ['plugins', 'inspect', 'cc-safety-net', '--runtime', '--json'];
+const INSPECT_HINT = 'Run `openclaw plugins inspect cc-safety-net --runtime` for details.';
+
+const PACKAGED: TreeSpec = {
+  [OPENCLAW_PLUGIN_ENTRY_FILE]: `${buildOpenClawArtifactHeader('dev')}export default {};\n`,
+  [OPENCLAW_PLUGIN_MANIFEST_FILE]: '{"id":"cc-safety-net"}\n',
+  [OPENCLAW_PLUGIN_PACKAGE_FILE]: '{"name":"cc-safety-net"}\n',
+};
+
+const installedPlugin = (overrides: TreeSpec = {}): TreeSpec => ({
+  ...Object.fromEntries(
+    Object.entries(PACKAGED).map(([name, content]) => [`${PLUGIN_DIR}/${name}`, content]),
+  ),
+  ...overrides,
+});
+
+afterEach(removeTempRoots);
+
+describe('resolving the OpenClaw state directory', () => {
+  test.each([
+    [
+      undefined,
+      undefined,
+      undefined,
+      '<home>/.openclaw/openclaw.json',
+      '<home>/.openclaw/extensions',
+    ],
+    [undefined, '~', undefined, '<home>/openclaw.json', '<home>/extensions'],
+    [undefined, '~', '~/cfg/openclaw.json', '<home>/cfg/openclaw.json', '<home>/extensions'],
+    [undefined, '~', '<home>/c/openclaw.json', '<home>/c/openclaw.json', '<home>/extensions'],
+    [undefined, '~/state', undefined, '<home>/state/openclaw.json', '<home>/state/extensions'],
+    [
+      undefined,
+      '~/state',
+      '~/cfg/openclaw.json',
+      '<home>/cfg/openclaw.json',
+      '<home>/state/extensions',
+    ],
+    [
+      undefined,
+      '~/state',
+      '<home>/c/openclaw.json',
+      '<home>/c/openclaw.json',
+      '<home>/state/extensions',
+    ],
+    [undefined, '<home>/abs', undefined, '<home>/abs/openclaw.json', '<home>/abs/extensions'],
+    [
+      undefined,
+      '<home>/abs',
+      '~/cfg/openclaw.json',
+      '<home>/cfg/openclaw.json',
+      '<home>/abs/extensions',
+    ],
+    [
+      undefined,
+      '<home>/abs',
+      '<home>/c/openclaw.json',
+      '<home>/c/openclaw.json',
+      '<home>/abs/extensions',
+    ],
+    [undefined, '  ', undefined, '<home>/.openclaw/openclaw.json', '<home>/.openclaw/extensions'],
+    [undefined, '  ', '~/cfg/openclaw.json', '<home>/cfg/openclaw.json', '<home>/cfg/extensions'],
+    [undefined, '  ', '<home>/c/openclaw.json', '<home>/c/openclaw.json', '<home>/c/extensions'],
+    [
+      '<home>/oc',
+      undefined,
+      undefined,
+      '<home>/oc/.openclaw/openclaw.json',
+      '<home>/oc/.openclaw/extensions',
+    ],
+    [
+      '<home>/oc',
+      '~/state',
+      undefined,
+      '<home>/oc/state/openclaw.json',
+      '<home>/oc/state/extensions',
+    ],
+    [
+      '<home>/oc',
+      undefined,
+      '~/cfg/openclaw.json',
+      '<home>/oc/cfg/openclaw.json',
+      '<home>/oc/cfg/extensions',
+    ],
+    ['<home>/oc', '<home>/abs', undefined, '<home>/abs/openclaw.json', '<home>/abs/extensions'],
+    [
+      '~/oc',
+      undefined,
+      undefined,
+      '<home>/oc/.openclaw/openclaw.json',
+      '<home>/oc/.openclaw/extensions',
+    ],
+    ['~', undefined, undefined, '<home>/.openclaw/openclaw.json', '<home>/.openclaw/extensions'],
+    ['  ', undefined, undefined, '<home>/.openclaw/openclaw.json', '<home>/.openclaw/extensions'],
+  ])(
+    'reads OPENCLAW_HOME=%s, OPENCLAW_STATE_DIR=%s and OPENCLAW_CONFIG_PATH=%s',
+    async (openClawHome, stateDir, configPath, config, extensions) => {
+      const env = {
+        ...(openClawHome === undefined ? {} : { OPENCLAW_HOME: openClawHome }),
+        ...(stateDir === undefined ? {} : { OPENCLAW_STATE_DIR: stateDir }),
+        ...(configPath === undefined ? {} : { OPENCLAW_CONFIG_PATH: configPath }),
+      };
+
+      expect(
+        (
+          await differential(
+            {
+              seed: {},
+              env,
+            },
+            (environment) => ({
+              config: getOpenClawConfigPath(environment),
+              plugin: getOpenClawPluginDir(environment),
+            }),
+          )
+        ).outcome,
+      ).toEqual({ kind: 'returned', value: { config, plugin: `${extensions}/cc-safety-net` } });
+    },
+  );
+});
+
+describe('guarding the extension directory before a --force command', () => {
+  const guard = async (seed: TreeSpec) =>
+    (
+      await differential(
+        {
+          seed,
+        },
+        (environment) => describeOutcome(() => assertOpenClawPluginDirIsOurs(environment)),
+      )
+    ).outcome;
+
+  test.each([
+    ['a home with no install at all', {} as TreeSpec],
+    ['our own packaged install', installedPlugin()],
+    ['the empty directory an uninstall leaves behind', { [PLUGIN_DIR]: null } as TreeSpec],
+  ])('lets a --force command touch %s', async (_case, seed) => {
+    expect(await guard(seed)).toEqual({ kind: 'returned', value: { ok: true, value: undefined } });
+  });
+
+  test.each([
+    ['a file the user put beside ours', installedPlugin({ [`${PLUGIN_DIR}/README.md`]: 'mine' })],
+    [
+      'an entry file without our header',
+      installedPlugin({ [`${PLUGIN_DIR}/${OPENCLAW_PLUGIN_ENTRY_FILE}`]: 'export default {};\n' }),
+    ],
+    [
+      'an entry file that is a symlink',
+      installedPlugin({
+        [`${PLUGIN_DIR}/${OPENCLAW_PLUGIN_ENTRY_FILE}`]: { symlink: '../../../elsewhere.js' },
+      }),
+    ],
+    [
+      'a symlink standing in for the directory',
+      { 'elsewhere/keep.txt': 'kept', [PLUGIN_DIR]: { symlink: '../../elsewhere' } } as TreeSpec,
+    ],
+  ])('refuses to touch %s', async (_case, seed) => {
+    expect(await guard(seed)).toEqual({
+      kind: 'returned',
+      value: { ok: false, error: { name: 'Error', message: REFUSAL } },
+    });
+  });
+});
+
+describe('finding the packaged plugin directory', () => {
+  test('agrees on the built directory the installed CLI ships with', () => {
+    expect(findOpenClawArtifactDir()).toBe(join(REPO_ROOT, 'dist', 'openclaw', 'cc-safety-net'));
+  });
+
+  test('looks beside the module itself, where the bundled cli.js sits at the dist root', () => {
+    expect(openClawArtifactCandidates()).toContain(
+      join(REPO_ROOT, 'src', 'hosts', 'openclaw', 'openclaw', 'cc-safety-net'),
+    );
+  });
+
+  test('says what is missing when a checkout was never built', () => {
+    const candidates = [join(createTempRoot('next-openclaw-unbuilt-'), 'gone')];
+
+    expect(describeOutcome(() => resolveOpenClawArtifactDir(candidates))).toEqual({
+      ok: false,
+      error: {
+        name: 'Error',
+        message:
+          'Packaged OpenClaw plugin directory not found. Reinstall cc-safety-net and try again.',
+      },
+    });
+  });
+
+  test('drives one install over the packaged directory, accepting capabilities', () => {
+    // OpenClaw >= 2026.8.1 refuses a non-interactive path install without capability consent,
+    // and install itself enables the plugin; a separate enable races the Gateway's reload.
+    expect(getOpenClawInstallCommands('/packaged/dir')).toEqual([
+      ['openclaw', 'plugins', 'install', '/packaged/dir', '--force', '--accept-capabilities'],
+    ]);
+  });
+});
+
+describe('verifying that the installed plugin actually loads', () => {
+  const inspect = (entry: Omit<FakeScriptEntry, 'command' | 'args'>) => ({
+    command: 'openclaw',
+    args: INSPECT_ARGS,
+    ...entry,
+  });
+  const reportStatus = (status: string, call?: number) =>
+    inspect({ stdout: JSON.stringify({ plugin: { status } }), call });
+  const INSPECT_CALL = `openclaw ${INSPECT_ARGS.join(' ')}`;
+  const ENABLE_CALL = 'openclaw plugins enable cc-safety-net';
+  const enableSucceeds = { command: 'openclaw', args: ['plugins', 'enable', 'cc-safety-net'] };
+  const RELOAD_SUPERSEDED = 'Error: config reload superseded by a newer runtime config source';
+  const verify = async (script: readonly FakeScriptEntry[], enableIfDisabled = false) => {
+    const bin = createFakeBin(createTempRoot('next-openclaw-verify-'), script);
+    const outcome = await withProcessEnv(bin.env, () =>
+      describeAsyncOutcome(() => verifyOpenClawPluginRuntime(enableIfDisabled)),
+    );
+    return { outcome, calls: bin.readLog().map((line) => line.split('\t')[0]) };
+  };
+
+  test('accepts a loaded plugin however much trace lands on stderr', async () => {
+    expect(
+      await verify([
+        inspect({
+          stdout: '{"plugin":{"status":"loaded"}}',
+          stderr: 'plugin lifecycle: resolve\nplugin lifecycle: import\n',
+        }),
+      ]),
+    ).toEqual({
+      outcome: { kind: 'returned', value: undefined },
+      calls: [INSPECT_CALL],
+    });
+  });
+
+  test('reports the status OpenClaw gave a plugin that did not load', async () => {
+    expect((await verify([reportStatus('error')])).outcome).toEqual({
+      kind: 'threw',
+      message: `OpenClaw reports the cc-safety-net plugin with status "error". ${INSPECT_HINT}`,
+    });
+  });
+
+  test('refuses to call a report it cannot read a success', async () => {
+    expect((await verify([inspect({ stdout: 'nope' })])).outcome).toEqual({
+      kind: 'threw',
+      message: `The cc-safety-net plugin's load state could not be verified: OpenClaw's runtime inspect report was unreadable. ${INSPECT_HINT}`,
+    });
+  });
+
+  test('passes a failed inspect command through as the command failure', async () => {
+    expect((await verify([inspect({ stderr: 'no such plugin\n', exit: 1 })])).outcome).toEqual({
+      kind: 'threw',
+      message: `Failed to run openclaw ${INSPECT_ARGS.join(' ')} (exit 1).\nno such plugin`,
+    });
+  });
+
+  test('enables a plugin OpenClaw kept disabled after an uninstall, then accepts it once loaded', async () => {
+    expect(
+      await verify([reportStatus('disabled', 1), enableSucceeds, reportStatus('loaded', 2)], true),
+    ).toEqual({
+      outcome: { kind: 'returned', value: undefined },
+      calls: [INSPECT_CALL, ENABLE_CALL, INSPECT_CALL],
+    });
+  });
+
+  test('accepts an enable OpenClaw saved before a newer reload superseded its runtime apply', async () => {
+    expect(
+      await verify(
+        [
+          reportStatus('disabled', 1),
+          { ...enableSucceeds, stderr: `${RELOAD_SUPERSEDED}\n`, exit: 1 },
+          reportStatus('loaded', 2),
+        ],
+        true,
+      ),
+    ).toEqual({
+      outcome: { kind: 'returned', value: undefined },
+      calls: [INSPECT_CALL, ENABLE_CALL, INSPECT_CALL],
+    });
+  });
+
+  test('reports the disabled status when a superseded enable left the plugin disabled', async () => {
+    expect(
+      await verify(
+        [
+          reportStatus('disabled'),
+          { ...enableSucceeds, stderr: `${RELOAD_SUPERSEDED}\n`, exit: 1 },
+        ],
+        true,
+      ),
+    ).toEqual({
+      outcome: {
+        kind: 'threw',
+        message: `OpenClaw reports the cc-safety-net plugin with status "disabled"; run \`openclaw plugins enable cc-safety-net\`. ${INSPECT_HINT}`,
+      },
+      calls: [INSPECT_CALL, ENABLE_CALL, INSPECT_CALL],
+    });
+  });
+
+  test('does not retry an enable that failed for another reason', async () => {
+    expect(
+      await verify(
+        [reportStatus('disabled'), { ...enableSucceeds, stderr: 'denied\n', exit: 1 }],
+        true,
+      ),
+    ).toEqual({
+      outcome: { kind: 'threw', message: `Failed to run ${ENABLE_CALL} (exit 1).\ndenied` },
+      calls: [INSPECT_CALL, ENABLE_CALL],
+    });
+  });
+
+  test('reports the status when enabling does not make the plugin load', async () => {
+    expect(await verify([reportStatus('disabled'), enableSucceeds], true)).toEqual({
+      outcome: {
+        kind: 'threw',
+        message: `OpenClaw reports the cc-safety-net plugin with status "disabled"; run \`openclaw plugins enable cc-safety-net\`. ${INSPECT_HINT}`,
+      },
+      calls: [INSPECT_CALL, ENABLE_CALL, INSPECT_CALL],
+    });
+  });
+
+  test('leaves a plugin disabled when it was already installed', async () => {
+    expect(await verify([reportStatus('disabled'), enableSucceeds])).toEqual({
+      outcome: {
+        kind: 'threw',
+        message: `OpenClaw reports the cc-safety-net plugin with status "disabled"; run \`openclaw plugins enable cc-safety-net\`. ${INSPECT_HINT}`,
+      },
+      calls: [INSPECT_CALL],
+    });
+  });
+});

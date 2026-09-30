@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - '.github/assets/**'
+  # No branch filter: a stacked PR is opened against its parent branch and only
+  # joins the stack afterwards, so filtering on main would skip its first run.
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - '.github/assets/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  full-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: package.json
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Audit all dependencies, including bundled build dependencies
+        run: bun run audit:dependencies
+      - name: Check source
+        run: bun run check:ci
+        env:
+          CC_SAFETY_NET_E2E_ARTIFACTS: ${{ runner.temp }}/cc-safety-net-e2e
+      - name: Verify E2E stability
+        run: bun run test:e2e:stability
+        env:
+          CC_SAFETY_NET_E2E_ARTIFACTS: ${{ runner.temp }}/cc-safety-net-e2e
+      - name: Rebuild owned artifacts
+        run: bun run build
+      - name: Reject stale generated artifacts
+        run: git diff --exit-code -- dist
+      - name: Verify package surfaces
+        run: |
+          bun run verify:repository-plugin
+          bun run verify:package
+      - uses: codecov/codecov-action@04b047e8bb82a0c002c8312c1c880fbc6a999d45
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload E2E failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: e2e-failure-evidence-ubuntu
+          path: ${{ runner.temp }}/cc-safety-net-e2e
+          if-no-files-found: ignore
+          retention-days: 7
+
+  full-check-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: package.json
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Check source
+        run: bun run check:ci
+        env:
+          CC_SAFETY_NET_E2E_ARTIFACTS: ${{ runner.temp }}/cc-safety-net-e2e
+      - name: Rebuild owned artifacts
+        run: bun run build
+      - name: Reject stale generated artifacts
+        run: git diff --exit-code -- dist
+      - name: Upload E2E failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: e2e-failure-evidence-macos
+          path: ${{ runner.temp }}/cc-safety-net-e2e
+          if-no-files-found: ignore
+          retention-days: 7
+
+  full-check-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: package.json
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Check source
+        run: bun run check:ci
+        env:
+          CC_SAFETY_NET_E2E_ARTIFACTS: ${{ runner.temp }}/cc-safety-net-e2e
+          # A short temp root, as the suite preload picks on macOS: a `status` row renders a fixture path into a
+          # fixed-width column, and the default user temp directory is too long for it.
+          CC_SAFETY_NET_TEST_TMPDIR: ${{ runner.temp }}
+      - name: Rebuild owned artifacts
+        run: bun run build
+      - name: Reject stale generated artifacts
+        run: git diff --exit-code -- dist
+      - name: Verify Windows command behavior
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory test-dir
+          $result = bun run cc-safety-net explain --cwd test-dir "rm -rf dist" 2>&1
+          if (-not ($result -match "ALLOWED")) { exit 1 }
+      - name: Upload E2E failure evidence
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: e2e-failure-evidence-windows
+          path: ${{ runner.temp }}/cc-safety-net-e2e
+          if-no-files-found: ignore
+          retention-days: 7
+
+  packed-runtime:
+    needs: full-check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            node: 18
+          - os: ubuntu-latest
+            node: 20
+          - os: ubuntu-latest
+            node: 22
+          - os: ubuntu-latest
+            node: 24
+          - os: windows-latest
+            node: 24
+          - os: macos-latest
+            node: 24
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: package.json
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - run: bun run build
+      - run: bun run verify:package
