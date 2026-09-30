@@ -157,7 +157,7 @@ export function printHelp(): void {
     ),
   );
   lines.push('');
-  lines.push('Documentation:        https://ccsafetynet.com/docs');
+  lines.push('Documentation:        https://local/cc-safety-net/docs');
 
   console.log(lines.join('\n'));
 }

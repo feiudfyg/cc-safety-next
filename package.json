@@ -1,6 +1,7 @@
 {
-  "name": "cc-safety-net",
+  "name": "@local/cc-safety-net",
   "version": "2.4.14",
+  "private": true,
   "description": "A coding agent CLI hook - block destructive commands and secret file access",
   "keywords": [
     "amp",
@@ -14,19 +15,7 @@
     "safety",
     "security"
   ],
-  "homepage": "https://ccsafetynet.com",
-  "bugs": {
-    "url": "https://github.com/kenryu42/cc-safety-net/issues"
-  },
   "license": "MIT",
-  "author": {
-    "name": "J Liew",
-    "email": "jliew@420024lab.com"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/kenryu42/cc-safety-net.git"
-  },
   "bin": {
     "cc-safety-net": "dist/bin/cc-safety-net.js",
     "ccsn": "dist/bin/cc-safety-net.js"
@@ -73,8 +62,6 @@
     "test:e2e:live": "CC_SAFETY_NET_E2E_LIVE=1 bun test tests/e2e-live",
     "test:coverage": "AGENT=1 bun test tests --path-ignore-patterns 'tests/e2e-live/**' --coverage --coverage-reporter=text --coverage-reporter=lcov",
     "cc-safety-net": "bun run src/entries/bin.ts",
-    "eval": "claude plugin eval . --ablation with-without --judge-model sonnet --allow-tools \"Bash(npx -y cc-safety-net:*)\" \"Bash(npx cc-safety-net:*)\"",
-    "prepare": "lefthook install",
     "lint:fix": "oxlint --fix src tests scripts knip.ts",
     "format": "oxfmt src tests scripts knip.ts .oxfmtrc.json .oxlintrc.json package.json kimi.plugin.json tsconfig.json tsconfig.build.json tsconfig.gui.json .claude-plugin .codex-plugin assets/cc-safety-net.schema.json docs/residual-risk-registry.json hooks",
     "format:check": "oxfmt --check src tests scripts knip.ts .oxfmtrc.json .oxlintrc.json package.json kimi.plugin.json tsconfig.json tsconfig.build.json tsconfig.gui.json .claude-plugin .codex-plugin assets/cc-safety-net.schema.json docs/residual-risk-registry.json hooks"
@@ -88,7 +75,6 @@
     "effect": "4.0.0-rc.112",
     "jscpd": "^5.0.14",
     "knip": "^6.32.0",
-    "lefthook": "^2.1.10",
     "oxc-parser": "0.142.0",
     "oxfmt": "0.70.0",
     "oxlint": "1.85.0",

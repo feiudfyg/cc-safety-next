@@ -152,7 +152,7 @@ const token = (
     token: string;
   }
 ).token;
-const fallbackRepoUrl = 'https://github.com/kenryu42/cc-safety-net';
+const fallbackRepoUrl = 'https://local/cc-safety-net';
 const safetyLevels: Record<SafetyLevel, [string, string]> = {
   standard: [
     'Standard',
@@ -872,7 +872,7 @@ const renderRules = () => {
     loaded.rulebooks.length === 0
       ? loaded.errors.length > 0
         ? '<p class="empty">Every configured rulebook was dropped, so no custom rule is enforced. See Diagnostics below.</p>'
-        : '<p class="empty">No custom rulebooks. Run <code>npx -y cc-safety-net rule init</code> to create one, or see the <a href="https://ccsafetynet.com/docs" target="_blank" rel="noopener">documentation</a>.</p>'
+        : '<p class="empty">No custom rulebooks. Run <code>npx -y cc-safety-net rule init</code> to create one, or see the <a href="https://local/cc-safety-net/docs" target="_blank" rel="noopener">documentation</a>.</p>'
       : loaded.rulebooks
           .map(
             (rulebook) => `<div class="rulebook-card">

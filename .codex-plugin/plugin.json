@@ -5,10 +5,10 @@
   "author": {
     "name": "J Liew",
     "email": "jliew@420024lab.com",
-    "url": "https://ccsafetynet.com"
+    "url": "https://local/cc-safety-net"
   },
-  "homepage": "https://ccsafetynet.com",
-  "repository": "https://github.com/kenryu42/cc-safety-net",
+  "homepage": "https://local/cc-safety-net",
+  "repository": "https://local/cc-safety-net",
   "license": "MIT",
   "keywords": ["codex", "safety", "security", "hook", "destructive-command"],
   "skills": "./skills/",
@@ -20,7 +20,7 @@
     "developerName": "J Liew",
     "category": "Security",
     "capabilities": ["Read"],
-    "websiteURL": "https://ccsafetynet.com",
+    "websiteURL": "https://local/cc-safety-net",
     "defaultPrompt": ["Explain the last CC Safety Net decision."],
     "brandColor": "#0F172A",
     "composerIcon": "./src/gui/frontend/favicon.svg",

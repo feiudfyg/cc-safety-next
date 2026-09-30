@@ -314,34 +314,24 @@ describe('the GUI star, integrations and install endpoints', () => {
   };
   const HEALTH = { update: { latestVersion: '9.9.9', updateAvailable: true } };
 
-  test('answers the star context and the star request from the injected hooks', async () => {
-    const starred = await runGuiRow({
+  test('answers the star context and reports the removed star request as not found', async () => {
+    const starContext = await runGuiRow({
       seed: {},
       options: () => ({
         fetchStarContext: async () => STAR_CONTEXT,
-        starRepo: async () => ({ ok: true }),
       }),
       requests: [
         { path: '/api/star/context' },
         { path: '/api/star/context', token: 'none' },
         { method: 'POST', path: '/api/star' },
-        { method: 'POST', path: '/api/star', token: 'query' },
-        { method: 'POST', path: '/api/star', token: 'wrong-header' },
       ],
     });
-    const refused = await runGuiRow({
-      seed: {},
-      options: () => ({ starRepo: async () => ({ ok: false }) }),
-      requests: [{ method: 'POST', path: '/api/star' }],
-    });
 
-    expect(starred.responses[0]?.body).toStrictEqual(STAR_CONTEXT);
-    expect(starred.responses[1]?.body).toStrictEqual({ error: 'Forbidden' });
-    expect(starred.responses[2]?.body).toStrictEqual({ ok: true });
-    expect(starred.responses.slice(3).map((response) => response.status)).toStrictEqual([403, 403]);
-    expect(refused.responses[0]?.body).toStrictEqual({
-      ok: false,
-      fallbackUrl: 'https://github.com/kenryu42/cc-safety-net',
+    expect(starContext.responses[0]?.body).toStrictEqual(STAR_CONTEXT);
+    expect(starContext.responses[1]?.body).toStrictEqual({ error: 'Forbidden' });
+    expect(starContext.responses[2]).toMatchObject({
+      status: 404,
+      body: { error: 'Not found' },
     });
   });
 

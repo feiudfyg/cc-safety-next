@@ -48,7 +48,9 @@ for (const name of ['index', 'api', 'opencode-v2']) {
   renameSync(join('dist', 'entries', `${name}.d.ts`), join('dist', `${name}.d.ts`));
 }
 
-await Bun.$`chmod 755 dist/bin/cc-safety-net.js`;
+if (process.platform !== 'win32') {
+  await Bun.$`chmod 755 dist/bin/cc-safety-net.js`;
+}
 await verifyBuildArtifacts();
 console.log(
   `  dist/index.js              ${(statSync('dist/index.js').size / 1024).toFixed(2)} KB`,

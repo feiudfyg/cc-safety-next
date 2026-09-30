@@ -86,8 +86,7 @@ those only as part of a workflow below.
    Pass the wrapper name as a separate argv value, or shell-escape it as one argument. If the
    user explicitly wants that built-in rule off, read its id from the `ruleId` field of
    `explain --json` and propose a per-rule policy override (see configure the policy). Otherwise
-   explain the risk the rule guards against and suggest reporting the case at
-   https://github.com/kenryu42/cc-safety-net/issues.
+   explain the risk the rule guards against.
 
 ## Configure rules
 
@@ -237,31 +236,11 @@ version.
 2. Locate the repository. Plugin installs ship the full repository, and this skill file lives
    at `<repo>/skills/cc-safety-net/SKILL.md` inside it, so the repository root is two
    directories above the skill file. Use the candidate only if its `package.json` has
-   `"name": "cc-safety-net"` and version `<version>`, and a `src/` directory exists next to it.
+   `"name": "@local/cc-safety-net"` and version `<version>`, and a `src/` directory exists next to it.
    If the package version differs, run `doctor` to report the outdated integration, then treat
    the candidate as unavailable and continue to the next step.
-3. If no matching local root exists (skill-only installs, a mismatched plugin, or guidance
-   without a file path), resolve the immutable commit recorded with the published package using
-   `npm view "cc-safety-net@<version>" gitHead`. Require a 40-character lowercase hexadecimal
-   commit and fetch that exact commit into a fresh owner-only temporary directory:
-
-   ```bash
-   set -euo pipefail
-   git_head=$(npm view "cc-safety-net@<version>" gitHead)
-   [[ $git_head =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid published gitHead" >&2; exit 1; }
-   source_dir=$(mktemp -d "${TMPDIR:-/tmp}/cc-safety-net-v<version>-XXXXXXXX")
-   trap 'rm -rf -- "$source_dir"' EXIT
-   chmod 700 "$source_dir"
-   git -c init.templateDir= init "$source_dir"
-   git -c core.hooksPath=/dev/null -C "$source_dir" fetch --depth 1 https://github.com/kenryu42/cc-safety-net "$git_head"
-   git -c core.hooksPath=/dev/null -C "$source_dir" checkout --detach "$git_head"
-   [[ $(git -C "$source_dir" rev-parse HEAD) == "$git_head" ]] || { echo "Source checkout mismatch" >&2; exit 1; }
-   printf 'Source checkout: %s\n' "$source_dir"
-   trap - EXIT
-   ```
-
-   Never answer from `main`; it can contain unreleased behavior the installed version does not
-   have.
+3. If no matching local root exists, the source is not available locally. Do not fetch it from
+   the network; answer from CLI output and say that the source was unavailable.
 4. Read `docs/` first; `residual-risk.md` and `secret-protection-known-limitations.md` exist to
    answer whether something is a known gap. For behavior questions, continue into
    `src/analyzer`, `src/guards`, and `src/rules`.

@@ -6,7 +6,6 @@ import { RULE_DOC } from '@/cli/rule/doc';
 import { printRuleAddResult, printRuleChangeResult, printRulesListReport } from '@/cli/rule/format';
 import { runRulesMigrate } from '@/cli/rule/migrate';
 import { runRuleSyncMigration } from '@/cli/rule/sync-migrate';
-import { getUpdateNotice } from '@/cli/rule/update-notice';
 import { runRulesVerify } from '@/cli/rule/verify';
 import type { Environment } from '@/core/environment';
 import {
@@ -167,8 +166,6 @@ async function runRuleCommandInternal(
 
   if (subcommand === 'doc') {
     console.log(RULE_DOC);
-    const notice = await getUpdateNotice(environment);
-    if (notice) console.error(notice);
     return 0;
   }
 

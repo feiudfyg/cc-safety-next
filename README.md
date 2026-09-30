@@ -6,23 +6,11 @@
   </picture>
 </h1>
 
-[![CI](https://github.com/kenryu42/cc-safety-net/actions/workflows/ci.yml/badge.svg)](https://github.com/kenryu42/cc-safety-net/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/github/kenryu42/cc-safety-net/branch/main/graph/badge.svg?token=C9QTION6ZF)](https://codecov.io/github/kenryu42/cc-safety-net)
-[![Version](https://img.shields.io/github/v/tag/kenryu42/cc-safety-net?label=version&color=blue)](https://github.com/kenryu42/cc-safety-net)
-[![License: MIT](https://img.shields.io/badge/License-MIT-red.svg)](https://opensource.org/licenses/MIT)
-
-<div align="center">
-
-**English** · [简体中文](https://ccsafetynet.com/docs/zh-Hans) · [日本語](https://ccsafetynet.com/docs/ja)
-
-https://github.com/user-attachments/assets/55887071-c722-4ed3-85c8-2ed00ba96b01
-
-</div>
+> Detached, self-maintained fork of CC Safety Net (`@local/cc-safety-net`). This fork is not
+> published to npm, is not affiliated with the upstream project, and does not check for or fetch
+> updates from any upstream service. Build it locally with `bun install && bun run build`.
 
 CC Safety Net (Coding CLI Safety Net) blocks destructive commands and access to secrets such as SSH keys and `.env` files before the tool call runs. It parses what the command does. Wrapping the command or reordering flags does not hide it. A broken config file never blocks anything.
-
-> [!NOTE]
-> **[Full documentation →](https://ccsafetynet.com/docs)** covers installation, configuration, reference material, guides, and the security model. This README is the short version.
 
 ## Supported coding CLIs
 

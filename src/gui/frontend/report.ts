@@ -1,5 +1,4 @@
-const reportIssueUrl =
-  'https://github.com/kenryu42/cc-safety-net/issues/new?template=false_positive.yml';
+const reportIssueUrl = 'https://local/cc-safety-net/issues/new?template=false_positive.yml';
 
 const reportUrlLimit = 8000;
 

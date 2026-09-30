@@ -60,11 +60,7 @@ import {
 } from './choose-directory';
 import { renderPolicyGuiHtml } from './page';
 
-const REPO = 'kenryu42/cc-safety-net';
-const REPO_URL = `https://github.com/${REPO}`;
-const STAR_TIMEOUT_MS = 10_000;
 const DEFAULT_ACTIVITY_DAYS = 7;
-type StarCountFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
 /** @internal */
 export interface StarContext {
@@ -108,7 +104,6 @@ const PROJECT_AUDIT_REJECTION =
 
 interface PolicyGuiServerOptions extends Partial<RulesPolicyOptions> {
   chooseDirectory?: () => Promise<ChooseDirectoryResult>;
-  starRepo?: () => Promise<{ ok: boolean }>;
   fetchStarContext?: () => Promise<StarContext>;
   fetchIntegrations?: () => Promise<IntegrationsStatus>;
   fetchHealth?: () => Promise<HealthStatus>;
@@ -420,12 +415,6 @@ async function handleRequest(
     return;
   }
 
-  if (request.method === 'POST' && url.pathname === '/api/star') {
-    const result = await (options.starRepo ?? starRepo)();
-    sendJson(response, 200, result.ok ? { ok: true } : { ok: false, fallbackUrl: REPO_URL });
-    return;
-  }
-
   if (request.method === 'GET' && url.pathname === '/api/integrations') {
     sendJson(
       response,
@@ -676,17 +665,6 @@ function openBrowser(url: string): Promise<void> {
 }
 
 /** @internal */
-export async function starRepo(
-  command = 'gh',
-  timeoutMs = STAR_TIMEOUT_MS,
-): Promise<{ ok: boolean }> {
-  return {
-    ok:
-      (await runGhCommand(command, ['api', '-X', 'PUT', `/user/starred/${REPO}`], timeoutMs)) === 0,
-  };
-}
-
-/** @internal */
 export async function fetchIntegrations(
   environment: Environment,
   probe: { fetcher?: VersionFetcher } = {},
@@ -784,68 +762,14 @@ export function runIntegration(
 }
 
 /** @internal */
-export async function fetchStarContext(
+export function fetchStarContext(
   environment: Environment,
-  options: { command?: string; logsDir?: string; fetchRepo?: StarCountFetch } = {},
+  options: { logsDir?: string } = {},
 ): Promise<StarContext> {
-  const [starred, starCount, blockedTotal] = await Promise.all([
-    userHasStarredRepo(options.command),
-    fetchStarCount(options.fetchRepo),
-    Promise.resolve(
-      getActivitySummary(environment, readRetentionDays(environment), options.logsDir).totalBlocked,
-    ),
-  ]);
-  return { starred, starCount, blockedTotal };
-}
-
-/** @internal */
-export async function userHasStarredRepo(
-  command = 'gh',
-  timeoutMs = STAR_TIMEOUT_MS,
-): Promise<boolean | null> {
-  if ((await runGhCommand(command, ['auth', 'status'], timeoutMs)) !== 0) return null;
-  const starredExitCode = await runGhCommand(command, ['api', `/user/starred/${REPO}`], timeoutMs);
-  if (starredExitCode === 0) return true;
-  if (starredExitCode === null) return null;
-  return false;
-}
-
-function runGhCommand(
-  command: string,
-  args: readonly string[],
-  timeoutMs: number,
-): Promise<number | null> {
-  return new Promise((resolve) => {
-    const child = spawn(command, args, {
-      stdio: 'ignore',
-      windowsHide: true,
-    });
-    let settled = false;
-    const timeout = setTimeout(() => {
-      child.kill();
-      finish(null);
-    }, timeoutMs);
-    const finish = (code: number | null) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      resolve(code);
-    };
-    child.once('error', () => finish(null));
-    child.once('close', finish);
+  return Promise.resolve({
+    starred: true,
+    starCount: null,
+    blockedTotal: getActivitySummary(environment, readRetentionDays(environment), options.logsDir)
+      .totalBlocked,
   });
-}
-
-async function fetchStarCount(fetchRepo: StarCountFetch = fetch): Promise<number | null> {
-  try {
-    const response = await fetchRepo(`https://api.github.com/repos/${REPO}`, {
-      headers: { accept: 'application/vnd.github+json' },
-      signal: AbortSignal.timeout(STAR_TIMEOUT_MS),
-    });
-    if (!response.ok) return null;
-    const body = (await response.json()) as { stargazers_count?: unknown };
-    return typeof body.stargazers_count === 'number' ? body.stargazers_count : null;
-  } catch {
-    return null;
-  }
 }
