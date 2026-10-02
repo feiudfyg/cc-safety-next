@@ -211,7 +211,6 @@ let activityQueryTimer: number | undefined;
 let renderedFeedEntries: FeedEntry[] = [];
 let suspects = new Set<FeedEntry>();
 let integrations: Integrations | null = null;
-const integrationBusy = new Set<string>();
 let rulesData: RulesData | null = null;
 let rulesRequested = false;
 let rulesScope = 'project';
@@ -779,7 +778,6 @@ const renderIntegrations = () => {
   if (!loaded) return;
   qs('integrations-list').innerHTML = loaded.targets
     .map((row) => {
-      const busy = integrationBusy.has(row.target);
       const version =
         row.version === null
           ? '<span class="muted">not detected</span>'
@@ -792,18 +790,11 @@ const renderIntegrations = () => {
             : row.status === 'not-inspected'
               ? '<span class="muted" title="This runtime\'s state file could not be read, so its status is unknown.">Not inspected</span>'
               : '<span class="muted">Not installed</span>';
-      const uninstall = row.status === 'active';
-      const busyLabel = uninstall ? 'Uninstalling…' : 'Installing…';
-      const action =
-        row.version === null
-          ? ''
-          : `<button type="button" class="${uninstall ? 'danger' : 'primary'}" data-integration-action="${uninstall ? 'uninstall' : 'install'}" data-integration-target="${escapeHtml(row.target)}"${busy ? ' disabled' : ''}>${busy ? busyLabel : uninstall ? 'Uninstall' : row.status === 'disabled' ? 'Enable' : 'Install'}</button>`;
       const note = row.note
         ? `<div class="status ${row.note.kind}">${escapeHtml(row.note.text)}</div>`
         : '';
       return `<div class="integration-row">
         <span class="integration-info"><strong>${escapeHtml(row.label)}</strong> ${version} ${status}</span>
-        ${action}
         ${note}
       </div>`;
     })
@@ -987,28 +978,6 @@ const copyRulePrompt = async () => {
   } finally {
     qs<HTMLButtonElement>('rules-copy-prompt').disabled = false;
   }
-};
-const runIntegrationAction = async (button: HTMLElement) => {
-  const target = button.dataset.integrationTarget;
-  if (!target || integrationBusy.has(target)) return;
-  integrationBusy.add(target);
-  const action = button.dataset.integrationAction;
-  renderIntegrations();
-  const result = await requestJson(`/api/${action}`, {
-    method: 'POST',
-    body: JSON.stringify({ target }),
-  });
-  integrationBusy.delete(target);
-  const row = integrations?.targets.find((entry) => entry.target === target);
-  if (!row) return;
-  const ok = result.ok && result.data.ok === true;
-  if (ok) row.status = action === 'install' ? 'active' : 'not-installed';
-  row.note = {
-    kind: ok ? 'ok' : 'error',
-    text: ok ? result.data.output : result.data?.output || errorText(result),
-  };
-  if (!ok) setAppStatus(action === 'install' ? 'Install failed' : 'Uninstall failed', 'error');
-  renderIntegrations();
 };
 const confirmDialog = (() => {
   const dialog = qs<HTMLDialogElement>('confirm-dialog');
@@ -2558,11 +2527,6 @@ document.addEventListener('click', (event) => {
   }
   if (target.closest<HTMLElement>('#rules-copy-prompt')) {
     void copyRulePrompt();
-    return;
-  }
-  const integrationButton = target.closest<HTMLElement>('[data-integration-action]');
-  if (integrationButton) {
-    void runIntegrationAction(integrationButton);
     return;
   }
   const ruleExampleButton = target.closest<HTMLElement>('[data-rule-example]');

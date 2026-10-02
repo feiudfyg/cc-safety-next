@@ -180,6 +180,31 @@ describe('gate/guards/guard-walk', () => {
     ]);
   });
 
+  test('cd options, bare cd, and the directory stack update the tracked directory', () => {
+    const cwdOf = (source: string) =>
+      segments(source)
+        .at(-1)
+        ?.match(/cwd=(\S+)/)?.[1] ?? null;
+    for (const source of [
+      `cd -L ${canonical('home')} && ls`,
+      `cd -P ${canonical('home')} && ls`,
+      `cd -- ${canonical('home')} && ls`,
+      `cd -LP ${canonical('home')} && ls`,
+      `cd -L -P ${canonical('home')} && ls`,
+    ]) {
+      expect(cwdOf(source), source).toBe(canonical('home'));
+    }
+    expect(cwdOf('cd && ls')).toBe(canonical('home'));
+    expect(cwdOf('cd -P sub && ls')).toBe(canonical('work', 'sub'));
+    expect(cwdOf('pushd sub && ls')).toBe(canonical('work', 'sub'));
+    expect(cwdOf(`pushd ${canonical('home')} && ls`)).toBe(canonical('home'));
+    expect(cwdOf('cd sub && popd && ls')).toBe(workspace);
+    expect(cwdOf('cd sub && pushd && ls')).toBe(workspace);
+    for (const source of ['cd -x sub && ls', 'cd sub extra && ls', 'pushd +1 && ls']) {
+      expect(cwdOf(source), source).toBe(workspace);
+    }
+  });
+
   test('a heredoc body is read as its own segments, and its fallbacks are reported', () => {
     expect(segments('cat <<EOF\ncat .env\nEOF')).toStrictEqual([
       `segment ["cat"] cwd=${workspace} pipe=null boundary=;`,

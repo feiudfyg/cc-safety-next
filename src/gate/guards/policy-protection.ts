@@ -4,7 +4,16 @@ import {
   normalizeProtectedFileCandidate,
   normalizeProtectedPathCandidate,
 } from '@/core/paths/canonicalization';
-import { getProjectPolicyPath, getUserPolicyPath, POLICY_FILE } from '@/core/policy/paths';
+import {
+  getProjectPolicyPath,
+  getProjectRulesConfigPath,
+  getProjectRulesDir,
+  getUserPolicyPath,
+  getUserRulesConfigPath,
+  getUserRulesDir,
+  POLICY_FILE,
+} from '@/core/policy/paths';
+import { parseCommand } from '@/core/shell/parse';
 import { getBasename } from '@/core/shell/tokens';
 import { isReadOnlyTool } from '@/core/tool-input';
 import type { EnvironmentContext } from '@/gate/analysis';
@@ -20,8 +29,11 @@ import { createToolInvocation, type ToolCallContext, type ToolRoute } from '@/ga
 import {
   expandTrackedShellVariables,
   type GuardSyntax,
+  interpreterCodePathCandidates,
   isAssignmentOnlySegment,
   type ProtectedPathShellState,
+  readGuardSyntax,
+  SHELL_STDIN_INTERPRETERS,
 } from './guard-walk';
 import {
   extractMvOperandPaths,
@@ -56,6 +68,7 @@ type PolicyConfigTarget = {
 type PolicyPathIdentity = {
   readonly files: ReadonlySet<string>;
   readonly directoriesAndAncestors: ReadonlySet<string>;
+  readonly trees: ReadonlySet<string>;
 };
 
 /** @internal */
@@ -154,8 +167,32 @@ function findPolicyConfigMutationTargetInCommand(
     findMalformedTarget: (source) =>
       findPolicyConfigTargetInMalformedText(source, cwd, identity, environment, budget)?.target ??
       null,
+    findInterpreterTarget: (command, code) =>
+      findPolicyConfigTargetInInterpreter(command, code, cwd, identity, environment, budget),
   });
   return target ? { target } : null;
+}
+
+function findPolicyConfigTargetInInterpreter(
+  command: string,
+  code: string,
+  cwd: string,
+  identity: PolicyPathIdentity,
+  environment: EnvironmentContext,
+  budget: Budget,
+): string | null {
+  if (command === 'eval' || SHELL_STDIN_INTERPRETERS.has(command)) {
+    const syntax = readGuardSyntax(code, parseCommand(code, 'posix'));
+    return (
+      findPolicyConfigMutationTargetInCommand(syntax, cwd, identity, environment, budget)?.target ??
+      null
+    );
+  }
+  return (
+    interpreterCodePathCandidates(code).find((candidate) =>
+      isPolicyFile(candidate, cwd, identity, environment, budget),
+    ) ?? null
+  );
 }
 
 function findPolicyConfigMutationTargetInSegment(
@@ -299,12 +336,33 @@ function createPolicyPathIdentity(
     normalize(getProjectPolicyPath(toolContext.executionCwd)),
     normalize(getProjectPolicyPath(toolContext.configCwd)),
   ];
+  const rulesFiles = [
+    normalize(getUserRulesConfigPath(environment)),
+    normalize(getProjectRulesConfigPath(toolContext.executionCwd)),
+    normalize(getProjectRulesConfigPath(toolContext.configCwd)),
+  ];
+  const trees = new Set([
+    normalize(getUserRulesDir(environment)),
+    normalize(getProjectRulesDir(toolContext.executionCwd)),
+    normalize(getProjectRulesDir(toolContext.configCwd)),
+  ]);
   const directoriesAndAncestors = new Set(projectFiles.map((file) => dirname(file)));
   for (let current = dirname(userFile); ; current = dirname(current)) {
     directoriesAndAncestors.add(current);
     if (dirname(current) === current) break;
   }
-  return { files: new Set([userFile, ...projectFiles]), directoriesAndAncestors };
+  return {
+    files: new Set([userFile, ...projectFiles, ...rulesFiles]),
+    directoriesAndAncestors,
+    trees,
+  };
+}
+
+function isWithinAny(path: string, trees: ReadonlySet<string>): boolean {
+  for (const tree of trees) {
+    if (path === tree || path.startsWith(`${tree}/`)) return true;
+  }
+  return false;
 }
 
 function isPolicyFile(
@@ -321,7 +379,11 @@ function isPolicyFile(
     budget,
     (name) => comparePath(name) === POLICY_FILE,
   );
-  return resolved !== null && identity.files.has(comparePath(resolved));
+  if (resolved !== null && identity.files.has(comparePath(resolved))) return true;
+  return isWithinAny(
+    comparePath(normalizeProtectedPathCandidate(target, cwd, environment, budget)),
+    identity.trees,
+  );
 }
 
 function isPolicyDirectoryOrAncestor(
@@ -331,8 +393,9 @@ function isPolicyDirectoryOrAncestor(
   environment: EnvironmentContext,
   budget: Budget,
 ): boolean {
-  return identity.directoriesAndAncestors.has(
-    comparePath(normalizeProtectedPathCandidate(target, cwd, environment, budget)),
+  const normalized = comparePath(normalizeProtectedPathCandidate(target, cwd, environment, budget));
+  return (
+    identity.directoriesAndAncestors.has(normalized) || isWithinAny(normalized, identity.trees)
   );
 }
 
@@ -344,7 +407,11 @@ function isPolicyFileOrDirectorySource(
   budget: Budget,
 ): boolean {
   const normalized = comparePath(normalizeProtectedPathCandidate(target, cwd, environment, budget));
-  return identity.files.has(normalized) || identity.directoriesAndAncestors.has(normalized);
+  return (
+    identity.files.has(normalized) ||
+    identity.directoriesAndAncestors.has(normalized) ||
+    isWithinAny(normalized, identity.trees)
+  );
 }
 
 function comparePath(path: string): string {

@@ -12,6 +12,9 @@ import {
 import { DEFAULT_COMMAND_PARSER_LIMITS, parseCommand } from '@/core/shell/parse';
 import { getBasename, hasUnclosedQuotes } from '@/core/shell/tokens';
 import type { EnvironmentContext } from '@/gate/analysis';
+import { type CdTarget, parseCdTarget } from '@/gate/analyzer/cd-arguments';
+import { extractInterpreterCodeArg } from '@/gate/analyzer/interpreters';
+import { extractDashCArg } from '@/gate/analyzer/shell-wrappers';
 import { stripWrappers } from '@/gate/analyzer/wrapper-prelude';
 
 export type GuardSyntax = Readonly<{
@@ -53,6 +56,7 @@ export type GuardWalkVisitor = Readonly<{
     redirection: GuardRedirection,
     state: ProtectedPathShellState,
   ) => string | null | typeof ADOPT_AS_OPERAND;
+  interpreter?: (command: string, code: string) => string | null;
 }>;
 
 export type GuardToken =
@@ -73,7 +77,8 @@ type GuardEvent =
       readonly body?: string;
       readonly consumer?: readonly string[];
     }
-  | { readonly kind: 'scope'; readonly edge: 'enter' | 'exit' };
+  | { readonly kind: 'scope'; readonly edge: 'enter' | 'exit' }
+  | { readonly kind: 'interpreter'; readonly command: string; readonly code: string };
 
 const HEREDOC_CONSUMER_WRAPPERS = new Set(['env', 'sudo', 'command', 'builtin']);
 
@@ -200,6 +205,11 @@ export function walkGuardSyntax(
       pipeProducer = frame.pipeProducer;
       continue;
     }
+    if (event.kind === 'interpreter') {
+      const outcome = visitor.interpreter?.(event.command, event.code);
+      if (outcome) return outcome;
+      continue;
+    }
     if (event.kind === 'operator') {
       if (!event.boundary) continue;
       const target = visitor.segment(segment, state, pipeProducer, event.operator, shellWords);
@@ -283,15 +293,48 @@ function applyShellState(
     ? new Map([...state.variables, ...extractShellAssignments(segment, state.variables)])
     : state.variables;
   const stripped = stripWrappers([...segment], environment);
-  const target = getBasename(stripped[0] ?? '').toLowerCase() === 'cd' ? stripped[1] : undefined;
-  if (!target) return { ...state, variables };
-  if (target === '-') {
+  const command = getBasename(stripped[0] ?? '').toLowerCase();
+  if (command !== 'cd' && command !== 'pushd' && command !== 'popd') {
+    return { ...state, variables };
+  }
+  const args = stripped.slice(1);
+  if (command === 'popd')
+    return applyDirectoryTarget(popdTarget(args), state, variables, environment, budget);
+  if (command === 'pushd')
+    return applyDirectoryTarget(pushdTarget(args), state, variables, environment, budget);
+  return applyDirectoryTarget(parseCdTarget(args), state, variables, environment, budget);
+}
+
+function popdTarget(args: readonly string[]): CdTarget {
+  return args.length === 0 ? { kind: 'previous' } : { kind: 'uncertain' };
+}
+
+function pushdTarget(args: readonly string[]): CdTarget {
+  const operands = args[0] === '--' ? args.slice(1) : args;
+  if (args.length !== operands.length && operands.length !== 1) return { kind: 'uncertain' };
+  if (operands.length === 0) return { kind: 'previous' };
+  if (operands.length !== 1) return { kind: 'uncertain' };
+  const token = operands[0] ?? '';
+  if (token === '-') return { kind: 'previous' };
+  if (token.startsWith('-') || token.startsWith('+')) return { kind: 'uncertain' };
+  return { kind: 'directory', target: token };
+}
+
+function applyDirectoryTarget(
+  target: CdTarget,
+  state: ProtectedPathShellState,
+  variables: ReadonlyMap<string, string>,
+  environment: EnvironmentContext,
+  budget: Budget,
+): ProtectedPathShellState {
+  if (target.kind === 'uncertain') return { ...state, variables };
+  if (target.kind === 'previous') {
     if (state.previous === null) return { ...state, variables };
     return { cwd: state.previous, variables, previous: state.cwd };
   }
   return {
     cwd: normalizeProtectedPathCandidate(
-      expandTrackedShellVariables(target, variables),
+      expandTrackedShellVariables(target.kind === 'home' ? '~' : target.target, variables),
       state.cwd,
       environment,
       budget,
@@ -409,9 +452,38 @@ function readNode(
     ];
   }
   return [
-    { start: node.span.start, events: readView(node, context) },
+    {
+      start: node.span.start,
+      events: [...readView(node, context), ...readInterpreterEvent(node)],
+    },
     ...readHeredocs(node, program, index, context),
   ];
+}
+
+function readInterpreterEvent(view: CommandView): GuardEvent[] {
+  const tokens = stripConsumerWrappers(view.words.map((word) => word.text));
+  const command = getBasename(tokens[0] ?? '').toLowerCase();
+  const code =
+    command === 'eval'
+      ? tokens.slice(1).join(' ')
+      : SHELL_STDIN_INTERPRETERS.has(command)
+        ? extractDashCArg([...tokens])
+        : isCodeInterpreter(command)
+          ? extractInterpreterCodeArg(tokens)
+          : null;
+  return code === null || code === ''
+    ? []
+    : [Object.freeze({ kind: 'interpreter' as const, command, code })];
+}
+
+const CODE_STRING_LITERAL = /'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"/g;
+const CODE_BARE_PATH = /[\w:./~@+-]*[./~][\w:./~@+-]*/g;
+
+export function interpreterCodePathCandidates(code: string): string[] {
+  const quoted = [...code.matchAll(CODE_STRING_LITERAL)]
+    .map((match) => (match[1] ?? match[2] ?? '').replace(/\\(.)/g, '$1'))
+    .filter((value) => value !== '');
+  return [...quoted, ...(code.match(CODE_BARE_PATH) ?? [])];
 }
 
 function readView(view: CommandView, context: ReadContext): GuardEvent[] {
@@ -584,7 +656,7 @@ function readWord(
     const nested = view.nested.find(
       (program) => program.span.start >= part.span.start && program.span.end <= part.span.end,
     );
-    if (state.double) {
+    if (state.double && !nested) {
       const quotedText = context.source.slice(part.span.start, part.span.end);
       pending += scanWordText(
         quotedText,
@@ -594,14 +666,6 @@ function readWord(
       )
         .map((run) => (typeof run === 'string' ? run : run.text))
         .join('');
-      const maskedHeredocHandovers = nested
-        ? readProgram(nested, context).filter(
-            (event) => event.kind === 'redirection' && event.body !== undefined,
-          )
-        : [];
-      if (maskedHeredocHandovers.length > 0) {
-        events.push(SCOPE_ENTER, ...maskedHeredocHandovers, SCOPE_EXIT);
-      }
       continue;
     }
     const inner = nested ? readProgram(nested, context) : [];

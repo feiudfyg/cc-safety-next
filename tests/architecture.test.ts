@@ -14,8 +14,6 @@ const THIRD_PARTY_ALLOWANCES: Record<string, readonly string[]> = {
   ],
   'entries/index.ts': ['@opencode-ai/plugin', '@opencode/plugin/effect/plugin'],
   'entries/opencode-v2.ts': ['@opencode/plugin/effect/plugin'],
-  'hosts/amp/tool-call.ts': ['@ampcode/plugin'],
-  'entries/amp.ts': ['@ampcode/plugin'],
 };
 
 const VALUE_THIRD_PARTY_ALLOWANCES: Record<string, readonly string[]> = {
@@ -25,9 +23,6 @@ const VALUE_THIRD_PARTY_ALLOWANCES: Record<string, readonly string[]> = {
 const HOST_LAYERS = ['core', 'gate', 'audit', 'hosts'];
 const NETWORK_MODULES = ['node:http', 'node:https', 'node:net', 'http', 'https', 'net'];
 const CHILD_PROCESS_ALLOWANCES: readonly string[] = [
-  'hosts/amp/run.ts',
-  'hosts/install/native.ts',
-  'hosts/install/choices.ts',
   'hosts/system-info.ts',
   'gui/index.ts',
   'gui/choose-directory.ts',
@@ -362,7 +357,7 @@ describe('src/ architecture', () => {
     ).toEqual([]);
     expect(
       layeringViolations(
-        join(SOURCE_ROOT, 'hosts', 'install', 'native.ts'),
+        join(SOURCE_ROOT, 'hosts', 'system-info.ts'),
         "import { spawn } from 'node:child_process';\n",
       ),
     ).toEqual([]);

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { basename, join, resolve, sep } from 'node:path';
 import { stripJsonComments } from '@/core/io/jsonc';
 import { type DetectContext, type HookDetection, readRecord } from '@/hosts/detect/context';
 import {
@@ -12,7 +12,9 @@ import {
 
 function resolveLocalPlugin(spec: string, cwd: string, home: string): boolean {
   const expanded = spec.startsWith('~') ? join(home, spec.slice(1)) : spec;
-  const packagePath = join(resolve(cwd, expanded), 'package.json');
+  const target = resolve(cwd, expanded);
+  if (spec.startsWith('~') && target !== home && !target.startsWith(home + sep)) return false;
+  const packagePath = join(target, 'package.json');
   if (!existsSync(packagePath)) return false;
   try {
     const name = readRecord(JSON.parse(readFileSync(packagePath, 'utf-8')), 'name');

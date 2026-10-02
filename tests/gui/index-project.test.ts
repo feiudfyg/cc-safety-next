@@ -232,7 +232,7 @@ describe('the GUI project draft', () => {
   test('shows the rows `policy check` prints for the same proposal', async () => {
     const proposal = {
       version: 1,
-      safety: { level: 'standard' },
+      safety: { level: 'paranoid' },
       workflow: { worktree_mode: true },
     };
     const api = await runGuiRow({
@@ -266,9 +266,6 @@ describe('the GUI project draft', () => {
         `  ${row.field}: ${row.before ?? '(unset)'} -> ${row.after ?? '(unset)'}`,
       );
     }
-    expect(diff.weakenings).toStrictEqual([
-      'project policy lowers level: strict -> standard',
-      'project policy enables worktree mode relaxations',
-    ]);
+    expect(diff.weakenings).toStrictEqual(['project policy enables worktree mode relaxations']);
   });
 });

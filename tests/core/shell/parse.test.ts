@@ -35,6 +35,39 @@ describe('core/shell/parse', () => {
     ]);
   });
 
+  test.each(['echo hi &> out.txt', 'echo hi &>> out.txt'])(
+    'reads %s as a redirect rather than a background connector',
+    (source) => {
+      const program = parseCommand(source, 'posix');
+      expect(program.status).toBe('complete');
+      const views = projectCommandViews(program);
+      expect(views).toHaveLength(1);
+      expect(views[0]?.words.map((word) => word.text)).toEqual(['echo', 'hi']);
+      expect(views[0]?.redirections.map((redirection) => redirection.operator)).toEqual([
+        source.includes('&>>') ? '&>>' : '&>',
+      ]);
+    },
+  );
+
+  test('reads a nested ${...} variable span to its matching brace', () => {
+    const program = parseCommand('echo ${x:-$(echo })} tail', 'posix');
+    expect(program.status).toBe('complete');
+    expect(projectCommandViews(program)[0]?.words.map((word) => word.text)).toEqual([
+      'echo',
+      '${x:-$(echo })}',
+      'tail',
+    ]);
+  });
+
+  test('does not split a word on vertical tab or form feed', () => {
+    const program = parseCommand('echo a\vb\fc', 'posix');
+    expect(program.status).toBe('complete');
+    expect(projectCommandViews(program)[0]?.words.map((word) => word.text)).toEqual([
+      'echo',
+      'a\vb\fc',
+    ]);
+  });
+
   test.each(['echo; f() { :; }', 'echo > output'])(
     'counts function names and redirect targets toward the word limit: %s',
     (source) => {
@@ -184,6 +217,10 @@ describe('core/shell/parse', () => {
       ['rm -rf x', 'posix'],
       ['Remove-Item x', 'powershell'],
       ['cat $env:TEMP\\x', 'powershell'],
+      ['rmdir build', 'posix'],
+      ['del build', 'posix'],
+      ['erase build', 'posix'],
+      ['rd build', 'posix'],
       ["python3 - <<'PY'\nRemove-Item x -Recurse -Force\nPY", 'posix'],
       ["Remove-Item '<<' x", 'powershell'],
       ['', 'posix'],

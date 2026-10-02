@@ -14,6 +14,7 @@ type ProtectedPathCommandScanner = Readonly<{
   findSegmentTarget: (segment: readonly string[], state: ProtectedPathShellState) => string | null;
   isRedirectionTarget: (target: string, state: ProtectedPathShellState) => boolean;
   findMalformedTarget: (source: string) => string | null;
+  findInterpreterTarget?: (command: string, code: string) => string | null;
 }>;
 
 export function findProtectedPathMutationInCommand(
@@ -35,6 +36,7 @@ export function findProtectedPathMutationInCommand(
       )
         ? redirection.target
         : null,
+    ...(scanner.findInterpreterTarget ? { interpreter: scanner.findInterpreterTarget } : {}),
   });
 }
 

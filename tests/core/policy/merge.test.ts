@@ -187,21 +187,32 @@ describe('the weakening lines a project policy raises', () => {
 });
 
 describe('what the merged policy holds', () => {
-  test('a project level replaces the user level', () => {
+  test('a project level can only raise the user level, never lower it', () => {
     expect(
       mergeProjectPolicy(STRONG_USER, { safety: { level: 'standard' } }).policy.safety.level,
-    ).toBe('standard');
+    ).toBe('paranoid');
+    expect(
+      mergeProjectPolicy(OPEN_USER, { safety: { level: 'paranoid' } }).policy.safety.level,
+    ).toBe('paranoid');
   });
 
-  test('path lists are the union of both scopes, user entries first and deduplicated', () => {
+  test('a project cannot add a destructive allow path the user did not vouch for', () => {
     expect(
       mergeProjectPolicy(STRONG_USER, {
         destructive_command_protection: { allow_paths: ['~/u', '~/p'] },
       }).policy.destructive_command_protection.allow_paths,
-    ).toEqual(['~/u', '~/p']);
+    ).toEqual(['~/u']);
   });
 
-  test('per-rule overrides merge by rule id, with the project value winning on a collision', () => {
+  test('a project can add a secret deny path, which strengthens', () => {
+    expect(
+      mergeProjectPolicy(STRONG_USER, {
+        secret_protection: { deny_paths: ['~/d', '~/p'] },
+      }).policy.secret_protection.deny_paths,
+    ).toEqual(['~/d', '~/p']);
+  });
+
+  test('a project may enable a rule but a disable it declared does not take effect', () => {
     expect(
       mergeProjectPolicy(TIER_USER, {
         secret_protection: {
@@ -211,7 +222,6 @@ describe('what the merged policy holds', () => {
     ).toEqual({
       'secret.cli.codex.config': 'on',
       'secret.ext.pem': 'on',
-      'secret.cli.claude-code.config': 'off',
     });
   });
 
@@ -382,35 +392,28 @@ describe('properties every user and project pair must satisfy', () => {
     }
   });
 
-  test('a reported level drop is a real drop, and the merged policy is at the lower level', () => {
+  test('a reported level drop is named but never applied: the merged level is not lower', () => {
     const rank = { standard: 0, strict: 1, paranoid: 2 };
     for (const pair of SAMPLED) {
       const merged = mergeProjectPolicy(pair.user, pair.project);
+      expect(rank[merged.policy.safety.level]).toBeGreaterThanOrEqual(rank[pair.user.safety.level]);
       const line = merged.weakenings.find((one) => one.startsWith('project policy lowers level'));
       if (line === undefined) continue;
-      expect(line).toBe(
-        `project policy lowers level: ${pair.user.safety.level} -> ${merged.policy.safety.level}`,
-      );
-      expect(rank[merged.policy.safety.level]).toBeLessThan(rank[pair.user.safety.level]);
+      expect(rank[merged.policy.safety.level]).toBe(rank[pair.user.safety.level]);
     }
   });
 
-  test('a rule reported as disabled is off in the merged policy and was not off before', () => {
+  test('a rule reported as disabled is left as it was: the merged value is never off', () => {
     for (const pair of SAMPLED) {
       const merged = mergeProjectPolicy(pair.user, pair.project);
       const overrides = {
         ...merged.policy.destructive_command_protection.overrides,
         ...merged.policy.secret_protection.overrides,
       };
-      const before = {
-        ...pair.user.destructive_command_protection.overrides,
-        ...pair.user.secret_protection.overrides,
-      };
       for (const line of merged.weakenings) {
         if (!line.startsWith('project policy disables rule ')) continue;
         const id = line.slice('project policy disables rule '.length);
-        expect(overrides[id]).toBe('off');
-        expect(before[id]).not.toBe('off');
+        expect(overrides[id]).not.toBe('off');
       }
     }
   });

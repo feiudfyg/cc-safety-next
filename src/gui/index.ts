@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { parseCommandArgs } from '@/cli/args';
@@ -150,7 +150,9 @@ export async function createPolicyGuiServer(
 
   const session: ProjectDraftSession = { dir: null, revision: 0 };
   const server = createServer((request, response) => {
-    void handleRequest(createEnvironment, request, response, token, options, session);
+    void handleRequest(createEnvironment, request, response, token, options, session).catch(
+      (error: unknown) => sendServerError(response, error),
+    );
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -181,6 +183,10 @@ async function handleRequest(
 ): Promise<void> {
   const environment = createEnvironment();
   const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  if (!requestHasLocalHost(request)) {
+    sendJson(response, 403, { error: 'Forbidden' });
+    return;
+  }
   if (request.method === 'GET' && url.pathname === '/favicon.ico') {
     response.writeHead(204, { 'cache-control': 'no-store' });
     response.end();
@@ -524,10 +530,33 @@ function parseActivityDays(raw: string | null, retentionDays: number): number | 
   return days;
 }
 
+function requestHasLocalHost(request: IncomingMessage): boolean {
+  const host = request.headers.host;
+  if (host === undefined) return false;
+  const hostname = host.replace(/:\d+$/, '').toLowerCase();
+  return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '[::1]';
+}
+
+function tokensMatch(provided: string, expected: string): boolean {
+  const left = Buffer.from(provided);
+  const right = Buffer.from(expected);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
 function requestHasValidToken(request: IncomingMessage, url: URL, token: string): boolean {
-  if (url.searchParams.get('token') !== token) return false;
+  const provided = url.searchParams.get('token');
+  if (provided === null || !tokensMatch(provided, token)) return false;
   if (request.method !== 'POST') return true;
-  return request.headers['x-cc-safety-net-token'] === token;
+  const header = request.headers['x-cc-safety-net-token'];
+  return typeof header === 'string' && tokensMatch(header, token);
+}
+
+function sendServerError(response: ServerResponse, error: unknown): void {
+  if (response.headersSent) {
+    response.destroy();
+    return;
+  }
+  sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
 }
 
 const MAX_JSON_BODY_BYTES = 1_048_576;
@@ -556,10 +585,18 @@ async function readJsonBody(
   }
 }
 
+const SECURITY_HEADERS = {
+  'x-content-type-options': 'nosniff',
+  'referrer-policy': 'no-referrer',
+  'content-security-policy':
+    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+} as const;
+
 function sendHtml(response: ServerResponse, html: string): void {
   response.writeHead(200, {
     'content-type': 'text/html; charset=utf-8',
     'cache-control': 'no-store',
+    ...SECURITY_HEADERS,
   });
   response.end(html);
 }
@@ -568,6 +605,7 @@ function sendJson(response: ServerResponse, status: number, body: unknown): void
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
+    ...SECURITY_HEADERS,
   });
   response.end(JSON.stringify(body));
 }

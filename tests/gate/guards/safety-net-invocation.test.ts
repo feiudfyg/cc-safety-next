@@ -43,10 +43,10 @@ const TOKEN_LISTS: readonly (readonly string[])[] = [
   ['run', 'dist/bin/cc-safety-net.js', 'policy', 'apply'],
   ['run', 'other.js', 'policy', 'apply'],
   ['dist/bin/cc-safety-net.js', 'policy', 'apply'],
-  ['src/cli/cc-safety-net.ts', 'explain', 'x'],
+  ['dist/cli.js', 'explain', 'x'],
   ['/opt/app/dist/bin/cc-safety-net.js', 'policy', 'apply'],
   ['C:\\app\\dist\\bin\\cc-safety-net.js', 'policy', 'apply'],
-  ['--experimental-strip-types', 'src/cli/cc-safety-net.ts', 'explain', 'x'],
+  ['--experimental-strip-types', 'dist/cli.js', 'explain', 'x'],
   ['--', 'dist/bin/cc-safety-net.js', 'policy', 'apply'],
   ['cc-safety-net'],
   ['ccsn', 'ccsn', 'explain', 'x'],
@@ -136,7 +136,7 @@ describe('safetyNetSubcommandIndex', () => {
       },
       {
         command: 'node',
-        tokens: ['--experimental-strip-types', 'src/cli/cc-safety-net.ts', 'explain', 'x'],
+        tokens: ['--experimental-strip-types', 'dist/cli.js', 'explain', 'x'],
         narrow: null,
         broad: 2,
       },
@@ -167,13 +167,11 @@ describe('safetyNetSubcommandIndex', () => {
     }
   });
 
-  test('the cutover entrypoint is recognized like the retired one', () => {
+  test('the source entrypoint and the built CLI bundle are recognized alike', () => {
     const cutover = safetyNetSubcommandIndex('bun', ['src/entries/bin.ts', 'explain', 'x'], {});
 
     expect(cutover).not.toBeNull();
-    expect(cutover).toBe(
-      safetyNetSubcommandIndex('bun', ['src/cli/cc-safety-net.ts', 'explain', 'x'], {}),
-    );
+    expect(cutover).toBe(safetyNetSubcommandIndex('bun', ['dist/cli.js', 'explain', 'x'], {}));
   });
 
   test('the table reaches both answers, so the sweep is not vacuous', () => {

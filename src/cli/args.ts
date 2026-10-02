@@ -44,6 +44,21 @@ export function parseCommandArgs<
       help = true;
       continue;
     }
+    if (arg.startsWith('--') && arg.includes('=')) {
+      const separator = arg.indexOf('=');
+      const name = arg.slice(0, separator);
+      const inlineValue = arg.slice(separator + 1);
+      const valueEntry = valueEntries.find(([, spellings]) => spellings.includes(name));
+      if (valueEntry) {
+        values[valueEntry[0]] = inlineValue;
+        continue;
+      }
+      const listEntry = listEntries.find(([, spellings]) => spellings.includes(name));
+      if (listEntry) {
+        lists[listEntry[0]] = [...(lists[listEntry[0]] ?? []), inlineValue];
+        continue;
+      }
+    }
     const booleanEntry = booleanEntries.find(([, spellings]) => spellings.includes(arg));
     if (booleanEntry) {
       flags[booleanEntry[0]] = true;

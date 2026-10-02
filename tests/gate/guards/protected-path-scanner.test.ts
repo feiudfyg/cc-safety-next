@@ -181,8 +181,12 @@ describe('protected path scanner walk', () => {
       { source: 'command cd policy && rm -rf x', cwd: () => canonical(workspace, 'policy') },
       { source: 'FOO=1 cd policy && rm -rf x', cwd: () => canonical(workspace, 'policy') },
       { source: '/usr/bin/cd policy && rm -rf x', cwd: () => canonical(workspace, 'policy') },
-      { source: 'cd; rm -rf x', cwd: () => workspace },
+      { source: 'cd; rm -rf x', cwd: () => canonical(home) },
       { source: 'cd ""; rm -rf x', cwd: () => workspace },
+      { source: 'cd -P policy && rm -rf x', cwd: () => canonical(workspace, 'policy') },
+      { source: 'cd -- policy && rm -rf x', cwd: () => canonical(workspace, 'policy') },
+      { source: 'pushd policy && rm -rf x', cwd: () => canonical(workspace, 'policy') },
+      { source: 'cd policy && popd && rm -rf x', cwd: () => workspace },
       {
         source: 'cd /absolute/missing && rm -rf x',
         cwd: () => resolve('/absolute/missing').split(sep).join('/'),

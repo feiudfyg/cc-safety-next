@@ -68,8 +68,13 @@ export function getSecretAllowPathError(value: unknown, home: string): string | 
 
 function coversGuardConfig(absolutePath: string, home: string): boolean {
   const normalized = comparableAllowPath(absolutePath);
-  const guardRoot = comparableAllowPath(join(home, '.cc-safety-net'));
-  return normalized === guardRoot || normalized.startsWith(`${guardRoot}${sep}`);
+  const guardRoots = [join(home, '.cc-safety-net')];
+  const configuredHome = process.env.CC_SAFETY_NET_HOME;
+  if (configuredHome) guardRoots.push(configuredHome.replaceAll('\\', '/'));
+  return guardRoots.some((root) => {
+    const guardRoot = comparableAllowPath(root);
+    return normalized === guardRoot || normalized.startsWith(`${guardRoot}${sep}`);
+  });
 }
 
 export function getAllowPathHomeConflictError(absolutePath: string, home: string): string | null {

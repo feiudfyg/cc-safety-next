@@ -34,40 +34,65 @@ export function mergeProjectPolicy(
   const policy: GuiPolicy = {
     version: 1,
     safety: {
-      level: project.safety?.level ?? user.safety.level,
-      overrides: { ...user.safety.overrides, ...project.safety?.overrides },
+      level: stricterLevel(user.safety.level, project.safety?.level),
+      overrides: {
+        ...user.safety.overrides,
+        ...enabledBooleanOverrides(project.safety?.overrides),
+      },
     },
     workflow: {
-      worktree_mode: project.workflow?.worktree_mode ?? user.workflow.worktree_mode,
+      worktree_mode:
+        project.workflow?.worktree_mode === false ? false : user.workflow.worktree_mode,
     },
     destructive_command_protection: {
       enabled:
-        project.destructive_command_protection?.enabled ??
-        user.destructive_command_protection.enabled,
+        user.destructive_command_protection.enabled ||
+        project.destructive_command_protection?.enabled === true,
       overrides: {
         ...user.destructive_command_protection.overrides,
-        ...project.destructive_command_protection?.overrides,
+        ...enabledRuleOverrides(project.destructive_command_protection?.overrides),
       },
-      allow_paths: unionPaths(
-        user.destructive_command_protection.allow_paths,
-        project.destructive_command_protection?.allow_paths,
-      ),
+      allow_paths: [...user.destructive_command_protection.allow_paths],
     },
     secret_protection: {
-      enabled: project.secret_protection?.enabled ?? user.secret_protection.enabled,
-      overrides: { ...user.secret_protection.overrides, ...project.secret_protection?.overrides },
+      enabled: user.secret_protection.enabled || project.secret_protection?.enabled === true,
+      overrides: {
+        ...user.secret_protection.overrides,
+        ...enabledRuleOverrides(project.secret_protection?.overrides),
+      },
       deny_paths: unionPaths(
         user.secret_protection.deny_paths,
         project.secret_protection?.deny_paths,
       ),
-      allow_paths: unionPaths(
-        user.secret_protection.allow_paths,
-        project.secret_protection?.allow_paths,
-      ),
+      allow_paths: [...user.secret_protection.allow_paths],
     },
     audit: user.audit,
   };
   return { policy, weakenings: collectWeakenings(user, project) };
+}
+
+function stricterLevel(
+  user: PolicySafetyLevel,
+  project: PolicySafetyLevel | undefined,
+): PolicySafetyLevel {
+  if (project === undefined) return user;
+  return LEVEL_RANK[project] >= LEVEL_RANK[user] ? project : user;
+}
+
+function enabledBooleanOverrides(
+  project: Partial<Record<SafetyLevelCapability, boolean>> | undefined,
+): Partial<Record<SafetyLevelCapability, boolean>> {
+  return Object.fromEntries(
+    Object.entries(project ?? {}).filter(([, value]) => value === true),
+  ) as Partial<Record<SafetyLevelCapability, boolean>>;
+}
+
+function enabledRuleOverrides(
+  project: Record<string, DestructiveCommandRuleOverride> | undefined,
+): Record<string, DestructiveCommandRuleOverride> {
+  return Object.fromEntries(
+    Object.entries(project ?? {}).filter(([, value]) => value === 'on'),
+  ) as Record<string, DestructiveCommandRuleOverride>;
 }
 
 function unionPaths(user: readonly string[], project: readonly string[] | undefined): string[] {
@@ -137,5 +162,10 @@ function disabledRules(
 }
 
 function addedPaths(user: readonly string[], project: readonly string[] | undefined): string[] {
-  return (project ?? []).filter((path) => !user.includes(path));
+  const vouched = new Set(user.map(stripTrailingSlashes));
+  return (project ?? []).filter((path) => !vouched.has(stripTrailingSlashes(path)));
+}
+
+function stripTrailingSlashes(path: string): string {
+  return path.replace(/[\\/]+$/, '');
 }

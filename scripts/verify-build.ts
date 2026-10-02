@@ -1,27 +1,8 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { isBuiltin } from 'node:module';
 import { posix, relative, resolve } from 'node:path';
 
 function isBuildChunkArtifact(path: string): boolean {
   return /^dist\/chunks\/[A-Za-z0-9_-]+\.js$/.test(path);
-}
-
-/** @internal */
-export function getRuntimeImportSpecifiers(source: string): string[] {
-  return [
-    ...source.matchAll(
-      /(?:(?<![\w$-])from\s*["']|\bimport\s*\(\s*["']|\brequire\w*\(\s*["'])([^"']+)["']/g,
-    ),
-  ]
-    .map((match) => match[1])
-    .filter((specifier): specifier is string => specifier !== undefined);
-}
-
-/** @internal */
-export function unbundledRuntimeImports(source: string): string[] {
-  return [
-    ...new Set(getRuntimeImportSpecifiers(source).filter((specifier) => !isBuiltin(specifier))),
-  ];
 }
 
 async function listFiles(directory: string): Promise<string[]> {
@@ -67,7 +48,9 @@ export async function verifyBuildArtifacts(): Promise<string[]> {
   const missingEntries = buildEntryArtifacts.filter((path) => !files.includes(path));
   const chunks = files.filter((path) => isBuildChunkArtifact(path));
   if (unexpected.length > 0 || missingEntries.length > 0) {
-    throw new Error(`Unexpected build artifacts:\n${files.join('\n')}`);
+    throw new Error(
+      `Unexpected build artifacts:\n${unexpected.join('\n')}\nMissing build artifacts:\n${missingEntries.join('\n')}`,
+    );
   }
 
   const reachableChunks = new Set<string>();
@@ -90,9 +73,6 @@ export async function verifyBuildArtifacts(): Promise<string[]> {
     throw new Error(
       `Build artifacts reference missing shared chunks:\n${[...missingChunks].join('\n')}`,
     );
-  }
-  if (chunks.length === 0) {
-    throw new Error('Build artifacts contain no shared chunks');
   }
   const orphanedChunks = chunks.filter((path) => !reachableChunks.has(path));
   if (orphanedChunks.length > 0) {

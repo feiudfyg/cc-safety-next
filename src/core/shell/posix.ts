@@ -231,7 +231,8 @@ function scanSequence(
       continue;
     }
 
-    const connector = readConnector(source, i);
+    const ampRedirect = char === '&' && source[i + 1] === '>' ? readRedirect(source, i) : null;
+    const connector = ampRedirect ? null : readConnector(source, i);
     if (connector) {
       flushCommand();
       if (!isExecutableNode(nodes.at(-1))) {
@@ -301,7 +302,8 @@ function scanSequence(
     }
 
     const redirect =
-      (char === '<' || char === '>') && source[i + 1] !== '(' ? readRedirect(source, i) : null;
+      ampRedirect ??
+      ((char === '<' || char === '>') && source[i + 1] !== '(' ? readRedirect(source, i) : null);
     if (redirect) {
       const prior = accumulator.words.at(-1);
       const attachedFd =
@@ -982,6 +984,10 @@ function readConnector(source: string, index: number): string | null {
 
 function readRedirect(source: string, index: number): string | null {
   const char = source[index];
+  if (char === '&') {
+    if (source[index + 1] !== '>') return null;
+    return source[index + 2] === '>' ? '&>>' : '&>';
+  }
   if (char === '>') {
     if (source[index + 1] === '>') return '>>';
     if (source[index + 1] === '&') return '>&';
@@ -997,20 +1003,57 @@ function readRedirect(source: string, index: number): string | null {
 }
 
 function isShellWhitespace(char: string): boolean {
-  const code = char.charCodeAt(0);
-  if (code === 32 || (code >= 9 && code <= 13)) return true;
-  if (code < 128) return false;
-  return /\s/u.test(char);
+  return char === ' ' || char === '\t' || char === '\n' || char === '\r';
 }
 
 function readVariableEnd(source: string, start: number, end: number): number {
   if (source[start + 1] === '{') {
-    const close = source.indexOf('}', start + 2);
-    return close === -1 || close >= end ? end : close + 1;
+    const close = findVariableBraceEnd(source, start + 2, end);
+    return close === -1 ? end : close + 1;
   }
   let i = start + 1;
   while (i < end && /[A-Za-z0-9_?@#$!*-]/.test(source[i] ?? '')) i++;
   return i === start + 1 ? start + 1 : i;
+}
+
+function findVariableBraceEnd(source: string, start: number, end: number): number {
+  let depth = 1;
+  const lexicalState = { single: false, double: false };
+  for (let i = start; i < end; i++) {
+    const char = source[i];
+    const lexicalEnd = scanLexicalQuoteOrComment(source, i, start, end, lexicalState);
+    if (lexicalEnd !== null) {
+      i = lexicalEnd;
+      continue;
+    }
+    if (source.startsWith('$((', i)) {
+      const arithmeticClose = findArithmeticEnd(source, i + 3, end);
+      if (arithmeticClose === -1) return -1;
+      i = arithmeticClose + 1;
+      continue;
+    }
+    if (source.startsWith('$(', i)) {
+      const commandClose = findSubstitutionEnd(source, i + 2, end, ')');
+      if (commandClose === -1) return -1;
+      i = commandClose;
+      continue;
+    }
+    if (char === '`') {
+      const backtickClose = findSubstitutionEnd(source, i + 1, end, '`');
+      if (backtickClose === -1) return -1;
+      i = backtickClose;
+      continue;
+    }
+    if (char === '{' && !lexicalState.double) {
+      depth++;
+      continue;
+    }
+    if (char === '}' && !lexicalState.double) {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
 }
 
 function readAnsiCString(source: string, start: number, end: number) {

@@ -1,5 +1,9 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import type { Environment } from '@/core/environment';
+import {
+  bindDelegatedPolicyFilesystemTarget,
+  readPolicyFile as readGuardedPolicyFile,
+} from '@/core/io/safe-read';
 import { DESTRUCTIVE_COMMAND_RULE_ID_SET } from '@/core/rules/destructive';
 import { SECRET_DEFAULT_OFF_RULE_ID_SET, SECRET_PROTECTION_RULE_ID_SET } from '@/core/rules/secret';
 import {
@@ -46,6 +50,7 @@ type PartialPolicy = {
 type PolicyConfig = PartialPolicy & {
   errors: string[];
   fallback?: PolicyFallback;
+  projectPolicyErrors?: string[];
   policyScopes?: PolicyScopes;
 };
 
@@ -85,12 +90,12 @@ export function loadPolicyConfig(
     Object.keys(project.policy).length > 0
       ? mergeProjectPolicy(user.gui ?? DEFAULT_GUI_POLICY, project.policy)
       : undefined;
-  const errors = [...user.errors, ...projectFile.errors, ...project.diagnostics];
+  const projectPolicyErrors = [...projectFile.errors, ...project.diagnostics];
+  const errors = [...user.errors, ...projectPolicyErrors];
 
   const fallback =
     (user.fallback === 'defaults' && merged ? 'salvaged' : user.fallback) ??
-    (user.gui ? undefined : projectFile.fallback) ??
-    (errors.length > 0 ? 'salvaged' : undefined);
+    (user.gui ? undefined : projectFile.fallback);
 
   const levelScope = project.policy.safety?.level
     ? 'project'
@@ -101,6 +106,7 @@ export function loadPolicyConfig(
     ...(merged ? normalizePolicyConfig(merged.policy) : user.policy),
     errors,
     ...(fallback ? { fallback } : {}),
+    ...(user.gui && projectPolicyErrors.length > 0 ? { projectPolicyErrors } : {}),
 
     ...(projectFile.exists
       ? { policyScopes: { levelScope, weakenings: merged?.weakenings ?? [] } }
@@ -525,6 +531,14 @@ export function createPolicyPreview(
   };
 }
 
+function readHardenedPolicyText(path: string): string | null {
+  try {
+    return readGuardedPolicyFile(bindDelegatedPolicyFilesystemTarget(path));
+  } catch {
+    return null;
+  }
+}
+
 export function readPolicyFile(
   path: string,
   home: string,
@@ -537,8 +551,17 @@ export function readPolicyFile(
 } {
   if (!existsSync(path)) return { exists: false, policy: createDefaultGuiPolicy(), errors: [] };
 
+  const content = readHardenedPolicyText(path);
+  if (content === null) {
+    return {
+      exists: true,
+      policy: createDefaultGuiPolicy(),
+      errors: [`${path}: Unable to read the policy file safely`],
+      fallback: 'defaults',
+    };
+  }
+
   try {
-    const content = readFileSync(path, 'utf-8');
     if (!content.trim()) {
       return {
         exists: true,

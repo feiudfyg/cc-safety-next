@@ -266,9 +266,9 @@ const ROWS: readonly Row[] = [
     },
     check: (snapshot) => {
       expect(snapshot.state).toBe('ready');
-      expect(snapshot.policy.safety.level).toBe('standard');
-      expect(snapshot.policy.worktreeMode).toBeTrue();
-      expect(snapshot.policy.secretProtection.enabled).toBeFalse();
+      expect(snapshot.policy.safety.level).toBe('strict');
+      expect(snapshot.policy.worktreeMode).toBeFalse();
+      expect(snapshot.policy.secretProtection.enabled).toBeTrue();
       expect(snapshot.policyScopes?.levelScope).toBe('project');
       expect(snapshot.policyScopes?.weakenings.length).toBeGreaterThan(0);
     },
@@ -286,8 +286,9 @@ const ROWS: readonly Row[] = [
       }),
     },
     check: (snapshot) => {
-      expect(reasonOf(snapshot)).toContain('the salvaged policy with protective defaults');
-      expect(snapshot.policy.safety.level).toBe('strict');
+      expect(reasonOf(snapshot)).toContain('invalid project policy');
+      expect(reasonOf(snapshot)).toContain('the user policy and built-in protections still apply');
+      expect(snapshot.policy.safety.level).toBe('paranoid');
       expect(snapshot.policyScopes?.levelScope).toBe('project');
     },
   },
@@ -349,7 +350,7 @@ const ROWS: readonly Row[] = [
     check: (snapshot) => {
       expect(snapshot.state).toBe('ready');
       expect(snapshot.policy.safety.level).toBe('strict');
-      expect(snapshot.policy.worktreeMode).toBeTrue();
+      expect(snapshot.policy.worktreeMode).toBeFalse();
     },
   },
   {

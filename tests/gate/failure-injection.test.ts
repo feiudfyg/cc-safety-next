@@ -175,7 +175,7 @@ describe('process state the two gates read differently', () => {
       writeFileSync(rulePath, original);
       spy.mockRestore();
 
-      expect(swaps.length).toBe(1);
+      expect(swaps.length).toBe(2);
       expect(ported.configFallback).toStrictEqual({
         reason:
           'Unable to access user policy filesystem safely. Those rule sources are not active; every other rule and all built-in protections still apply.',

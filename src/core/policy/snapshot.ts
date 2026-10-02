@@ -80,13 +80,22 @@ function getSnapshotFailure(
   userPolicy: ReturnType<typeof loadPolicyConfig>,
 ) {
   const policyWarning = getPolicyFallbackWarning(userPolicy);
-  if (rules.errors.length === 0 && rules.warnings.length === 0 && !policyWarning) return undefined;
+  const projectPolicyWarning = getProjectPolicyWarning(userPolicy);
+  if (
+    rules.errors.length === 0 &&
+    rules.warnings.length === 0 &&
+    !policyWarning &&
+    !projectPolicyWarning
+  ) {
+    return undefined;
+  }
   return {
     diagnostics: [...rules.errors, ...rules.warnings, ...userPolicy.errors],
     reason: combineInvalidReasons(
       rules.errors.length > 0 ? withDroppedSourceAdvice(rules.errors) : undefined,
       rules.warnings.length > 0 ? withTerminalPeriod(rules.warnings.join('; ')) : undefined,
       policyWarning,
+      projectPolicyWarning,
     ),
   };
 }
@@ -102,6 +111,11 @@ function getPolicyFallbackWarning(userPolicy: ReturnType<typeof loadPolicyConfig
       ? 'the salvaged policy with protective defaults'
       : 'built-in protective defaults';
   return `invalid policy config: ${userPolicy.errors.join('; ')}. Enforcing ${fallback}; the invalid values are not active. Fix the policy file manually`;
+}
+
+function getProjectPolicyWarning(userPolicy: ReturnType<typeof loadPolicyConfig>) {
+  if (userPolicy.projectPolicyErrors === undefined) return undefined;
+  return `invalid project policy: ${userPolicy.projectPolicyErrors.join('; ')}. Those project values are not active; the user policy and built-in protections still apply`;
 }
 
 function isPublicRuleSource(source: string): boolean {

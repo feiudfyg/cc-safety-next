@@ -132,6 +132,39 @@ describe('policy config protection through the shell', () => {
     expect(blocked('echo hello')).toBeFalse();
   });
 
+  test('cd options, the directory stack, and quoted substitution still reach the guard', () => {
+    const rows: readonly { readonly command: string; readonly blocked: boolean }[] = [
+      { command: `cd ${sh(home)} && cp /dev/null .cc-safety-net/policy.json`, blocked: true },
+      { command: `cd -L ${sh(home)} && cp /dev/null .cc-safety-net/policy.json`, blocked: true },
+      { command: `cd -P ${sh(home)} && cp /dev/null .cc-safety-net/policy.json`, blocked: true },
+      { command: `cd -- ${sh(home)} && cp /dev/null .cc-safety-net/policy.json`, blocked: true },
+      { command: `cd -LP ${sh(home)} && rm -rf .cc-safety-net`, blocked: true },
+      { command: `pushd ${sh(home)} && rm -rf .cc-safety-net`, blocked: true },
+      {
+        command: `cd ${sh(home)} && echo "$(cp /dev/null .cc-safety-net/policy.json)"`,
+        blocked: true,
+      },
+      { command: `echo "$(cp /dev/null ${sh(userPolicy)})"`, blocked: true },
+      { command: `echo "\`cp /dev/null ${sh(userPolicy)}\`"`, blocked: true },
+    ];
+    expectBlocked(rows);
+  });
+
+  test('an interpreter one-liner still reaches the guard', () => {
+    const rows: readonly { readonly command: string; readonly blocked: boolean }[] = [
+      { command: `bash -c "cp /dev/null ${sh(userPolicy)}"`, blocked: true },
+      { command: `sh -c "cp /dev/null ${sh(userPolicy)}"`, blocked: true },
+      { command: `eval "cp /dev/null ${sh(userPolicy)}"`, blocked: true },
+      { command: `env bash -c "cp /dev/null ${sh(userPolicy)}"`, blocked: true },
+      { command: `python3 -c "cp /dev/null ${sh(userPolicy)}"`, blocked: true },
+      { command: `node -e "cp /dev/null ${sh(userPolicy)}"`, blocked: true },
+      { command: `python3 -c "open('${sh(userPolicy)}','w')"`, blocked: true },
+      { command: `node -e "require('fs').writeFileSync('${sh(userPolicy)}','')"`, blocked: true },
+      { command: `bash -c "echo hello"`, blocked: false },
+    ];
+    expectBlocked(rows);
+  });
+
   test('a command that only mentions the policy path, or cannot be read, writes nothing', () => {
     const rows: readonly { readonly command: string; readonly blocked: boolean }[] = [
       {
@@ -145,8 +178,10 @@ describe('policy config protection through the shell', () => {
       { command: `cat <<'EOF' > ${sh(userPolicy)}\nbody\nEOF`, blocked: true },
       { command: `bash <<'EOF'\nrm ${sh(userPolicy)}\nEOF`, blocked: true },
       { command: `rm ${sh(userPolicy)} "`, blocked: true },
-      { command: `rm -rf ${sh(join(safetyHome, 'rules'))}`, blocked: false },
-      { command: `mv ${sh(join(safetyHome, 'rules'))} /tmp/rules`, blocked: false },
+      { command: `rm -rf ${sh(join(safetyHome, 'rules'))}`, blocked: true },
+      { command: `mv ${sh(join(safetyHome, 'rules'))} /tmp/rules`, blocked: true },
+      { command: `echo {} > ${sh(join(safetyHome, 'rules', 'rule.json'))}`, blocked: true },
+      { command: `rm ${sh(join(safetyHome, 'rules', 'packs', 'rulebook.json'))}`, blocked: true },
       { command: `find ${sh(safetyHome)} -type f -print`, blocked: false },
     ];
     expectBlocked(rows);

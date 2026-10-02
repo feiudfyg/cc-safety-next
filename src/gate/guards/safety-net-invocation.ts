@@ -1,9 +1,10 @@
 const CC_SAFETY_NET_ENTRYPOINTS = new Set([
   'src/entries/bin.ts',
-  'src/cli/cc-safety-net.ts',
   'dist/bin/cc-safety-net.js',
 
   'dist/bin/hook.js',
+
+  'dist/cli.js',
 ]);
 
 const CC_SAFETY_NET_BIN_NAMES = new Set(['cc-safety-net', 'ccsn']);

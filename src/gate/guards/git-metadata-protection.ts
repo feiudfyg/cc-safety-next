@@ -2,6 +2,7 @@ import { type Dirent, lstatSync, readdirSync } from 'node:fs';
 import { basename, isAbsolute, join, relative } from 'node:path';
 import type { Budget } from '@/core/budget';
 import { normalizeProtectedPathCandidate } from '@/core/paths/canonicalization';
+import { parseCommand } from '@/core/shell/parse';
 import { getBasename } from '@/core/shell/tokens';
 import { isReadOnlyTool } from '@/core/tool-input';
 import type { EnvironmentContext, ProtectedGitMetadata } from '@/gate/analysis';
@@ -9,8 +10,11 @@ import { stripWrappersForPathScan } from '@/gate/analyzer/wrapper-prelude';
 import type { SemanticFacts } from '@/gate/facts';
 import {
   expandTrackedShellVariables,
+  type GuardSyntax,
   isAssignmentOnlySegment,
   type ProtectedPathShellState,
+  readGuardSyntax,
+  SHELL_STDIN_INTERPRETERS,
 } from './guard-walk';
 import {
   extractMvOperandPaths,
@@ -47,7 +51,18 @@ export function findGitMetadataMutationTargetInSemanticFacts(
 
   const command = getCommandSyntaxFact(facts, 'input-candidate');
   if (!command) return null;
-  const target = findProtectedPathMutationInCommand(command.shell, cwd, environment, budget, {
+  const target = scanGitMetadataCommand(command.shell, cwd, metadata, environment, budget);
+  return target ? { target } : null;
+}
+
+function scanGitMetadataCommand(
+  syntax: GuardSyntax,
+  cwd: string,
+  metadata: ProtectedGitMetadata,
+  environment: EnvironmentContext,
+  budget: Budget,
+): string | null {
+  return findProtectedPathMutationInCommand(syntax, cwd, environment, budget, {
     findSegmentTarget: (segment, state) =>
       findGitMetadataMoveTarget(segment, state, metadata, environment, budget),
     isRedirectionTarget: (target, state) =>
@@ -60,8 +75,17 @@ export function findGitMetadataMutationTargetInSemanticFacts(
         metadata.markerFiles,
       ),
     findMalformedTarget: () => null,
+    findInterpreterTarget: (command, code) =>
+      command === 'eval' || SHELL_STDIN_INTERPRETERS.has(command)
+        ? scanGitMetadataCommand(
+            readGuardSyntax(code, parseCommand(code, 'posix')),
+            cwd,
+            metadata,
+            environment,
+            budget,
+          )
+        : null,
   });
-  return target ? { target } : null;
 }
 
 export function isProtectedGitDeleteTarget(

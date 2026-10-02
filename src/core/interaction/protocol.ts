@@ -10,6 +10,7 @@ import {
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Environment } from '@/core/environment';
+import { redactSecrets } from '@/core/redaction';
 import { getPluginTempDir } from '@/core/settings';
 import type { DangerLevel } from './danger';
 
@@ -65,7 +66,22 @@ export function writeInteractionRequest(
   request: InteractionRequest,
 ): void {
   mkdirSync(interactionDir(environment), { recursive: true });
-  writeFileSync(requestPath(environment, request.id), `${JSON.stringify(request)}\n`, 'utf-8');
+  writeFileSync(
+    requestPath(environment, request.id),
+    `${JSON.stringify(redactRequest(request))}\n`,
+    'utf-8',
+  );
+}
+
+function redactRequest(request: InteractionRequest): InteractionRequest {
+  return {
+    ...request,
+    ...(request.toolName === undefined ? {} : { toolName: redactSecrets(request.toolName) }),
+    ...(request.command === undefined ? {} : { command: redactSecrets(request.command) }),
+    ...(request.segment === undefined ? {} : { segment: redactSecrets(request.segment) }),
+    ...(request.ruleId === undefined ? {} : { ruleId: redactSecrets(request.ruleId) }),
+    ...(request.cwd === undefined ? {} : { cwd: redactSecrets(request.cwd) }),
+  };
 }
 
 export function listInteractionRequests(environment: Environment): InteractionRequest[] {

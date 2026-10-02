@@ -37,10 +37,6 @@ type PowerShellScanResult = {
 const AUTO_POWERSHELL_HEADS = new Set([
   'remove-item',
   'ri',
-  'del',
-  'erase',
-  'rd',
-  'rmdir',
   'get-content',
   'set-content',
   'add-content',
@@ -379,7 +375,7 @@ function readPowerShellWord(
       quoted = true;
       i++;
       let closed = false;
-      while (i < source.length) {
+      while (i < end) {
         if (source[i] === "'" && source[i + 1] === "'") {
           text += "'";
           i += 2;

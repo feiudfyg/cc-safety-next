@@ -142,10 +142,10 @@ const ROWS: readonly {
     expected: 'allow',
   },
   {
-    name: 'pushd does not move the tracked cwd',
+    name: 'pushd moves the tracked cwd',
     command: 'pushd ~ && cat .ssh/config',
     cwd: 'project',
-    expected: 'allow',
+    expected: DENIED_HOME_SSH_CONFIG,
   },
   {
     name: 'a read before the cd resolves against the directory it actually runs in',

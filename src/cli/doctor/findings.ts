@@ -43,7 +43,8 @@ const findingRules: FindingRule[] = [
               severity: 'error',
               title: 'No integration configured',
               detail: 'CC Safety Net is not connected to any supported coding-agent integration.',
-              fixHint: 'Run `cc-safety-net install` and configure at least one integration.',
+              fixHint:
+                'Add this plugin to the `plugin` array in your opencode.json and restart OpenCode.',
             },
           ]
         : [],

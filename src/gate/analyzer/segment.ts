@@ -20,6 +20,7 @@ import type {
 } from '@/gate/analysis';
 import type { CommandTraceContext } from '@/gate/trace';
 import { analyzeAwkSystemCallMatch, extractAwkExecutableSources } from './awk';
+import { parseCdTarget } from './cd-arguments';
 import { type ChildProvenance, normalizeChildCommands } from './child-command';
 import { analysisWordText, analyzedViewWords, textCommandWords } from './command-words';
 import { dangerousInTextMatch } from './dangerous-text';
@@ -1022,15 +1023,9 @@ export function resolveCwdAfterCommandView(
   }
 
   const operands = unwrapped.slice(cdIndex + 1);
-  const optionEnd = operands.findIndex(
-    (token) => token.length <= 1 || !token.startsWith('-') || token === '--',
-  );
-  const options = optionEnd === -1 ? operands : operands.slice(0, optionEnd);
-  if (options.some((token) => !/^-[LP]+$/.test(token))) return null;
-  const rest = optionEnd === -1 ? [] : operands.slice(optionEnd);
-  const targets = rest[0] === '--' ? rest.slice(1) : rest;
-  if (targets.length !== 1) return null;
-  const rawTarget = targets[0] ?? '';
+  const parsed = parseCdTarget(operands);
+  if (parsed.kind !== 'directory') return null;
+  const rawTarget = parsed.target;
   const targetWord = commandView.words.find(
     (word) => word.provenance === 'variable' && word.text === rawTarget,
   );

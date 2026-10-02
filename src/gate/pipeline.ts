@@ -198,7 +198,9 @@ export function evaluateGuard(invocation: ToolInvocation, options: GuardOptions)
     }),
   );
   const policy = snapshot.policy;
-  const modes = dependencies.getModes(policy, options.environment.env);
+  const modes = callDependency('config-load', command, () =>
+    dependencies.getModes(policy, options.environment.env),
+  );
 
   const reported = { level: modes.effectiveLevel, ...getConfigFallback(snapshot) };
   const secretTarget =

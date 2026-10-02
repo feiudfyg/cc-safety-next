@@ -185,7 +185,11 @@ const contentAt = (tree: TreeEntry[], path: string) =>
 const takeRequests = () => github.requests.splice(0).sort();
 
 const waitFor = async (ready: () => boolean) => {
-  while (!ready()) await new Promise((resolve) => setTimeout(resolve, 10));
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    if (ready()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  if (!ready()) throw new Error('waitFor timed out');
 };
 
 const addRow = (seed: TreeSpec, source: string, options: AddRulebookSourceOptions = {}) =>

@@ -277,6 +277,13 @@ describe('git metadata mutation targets in semantic facts', () => {
       { command: 'mv file.txt other.txt', target: null },
       { command: 'git mv file.txt other.txt', target: null },
       { command: 'mv', target: null },
+      { command: 'bash -c "mv .git /tmp/stash"', target: '.git' },
+      {
+        command: 'sh -c "echo payload > .git/hooks/post-commit"',
+        target: '.git/hooks/post-commit',
+      },
+      { command: 'env bash -c "mv .git /tmp/stash"', target: '.git' },
+      { command: 'bash -c "echo hello"', target: null },
     ];
     for (const row of rows) {
       expect(
