@@ -184,4 +184,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute to the project.
 
 ## License
 
-AGPL-3.0-or-later
+AGPL-3.0-or-later (see [LICENSE](LICENSE)).
+
+This project is a fork of [cc-safety-net](https://github.com/kenryu42/cc-safety-net) by J Liew,
+which is licensed under the MIT License. The original MIT terms are retained in
+[LICENSE-MIT](LICENSE-MIT) and apply to the portions derived from it.
