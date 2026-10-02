@@ -28,7 +28,7 @@ export type InteractionRequest = {
   cwd?: string;
 };
 
-const INTERACTION_DIR = 'interaction';
+const INTERACTION_DIR = 'cc-safety-net-interaction';
 const REQUEST_PREFIX = 'req-';
 const RESPONSE_PREFIX = 'res-';
 const HEARTBEAT_FILE = 'tui-alive';
