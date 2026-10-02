@@ -184,4 +184,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute to the project.
 
 ## License
 
-MIT
+AGPL-3.0-or-later
