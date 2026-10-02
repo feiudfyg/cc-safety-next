@@ -178,10 +178,6 @@ if (result.kind !== 'allow') {
 
 A full example is in [Embedding](https://ccsafetynet.com/docs/guides/embedding).
 
-## Development
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute to the project.
-
 ## License
 
 AGPL-3.0-or-later (see [LICENSE](LICENSE)).
