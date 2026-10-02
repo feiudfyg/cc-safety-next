@@ -7,6 +7,7 @@ import { DEFAULT_BLOCK_PROMPTS, loadBlockPrompts } from '@/core/prompts/block';
 import { loadPrompt, promptFilePath } from '@/core/prompts/store';
 import {
   ensureSettingsFile,
+  getInteractionConfig,
   getPluginTempDir,
   getPromptsDir,
   getSettingsPath,
@@ -29,6 +30,7 @@ function environmentFor(home: string, extra: Record<string, string> = {}) {
         name !== 'CC_SAFETY_NET_HOME' &&
         name !== 'CC_SAFETY_NET_NO_PROMPT_SEED' &&
         name !== 'CC_SAFETY_NET_NO_SETTINGS_SEED' &&
+        name !== 'CC_SAFETY_NET_NO_INTERACTION' &&
         name !== 'XDG_CONFIG_HOME' &&
         name !== 'OPENCODE_CONFIG_DIR',
     ),
@@ -105,6 +107,30 @@ describe('plugin settings', () => {
 
     expect(loadPluginSettings(environment)).toStrictEqual({});
     expect(existsSync(getSettingsPath(environment))).toBe(false);
+  });
+
+  test('enables interaction with a two-minute default timeout', () => {
+    const home = createRoot();
+    expect(getInteractionConfig(environmentFor(home))).toStrictEqual({
+      enabled: true,
+      timeoutMs: 120_000,
+    });
+  });
+
+  test('reads an explicit interaction toggle and timeout', () => {
+    const home = createRoot();
+    writeSettings(home, { interaction: false, interaction_timeout_seconds: 5 });
+    expect(getInteractionConfig(environmentFor(home))).toStrictEqual({
+      enabled: false,
+      timeoutMs: 5000,
+    });
+  });
+
+  test('disables interaction from the environment guard', () => {
+    const home = createRoot();
+    expect(
+      getInteractionConfig(environmentFor(home, { CC_SAFETY_NET_NO_INTERACTION: '1' })),
+    ).toStrictEqual({ enabled: false, timeoutMs: 0 });
   });
 });
 

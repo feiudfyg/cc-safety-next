@@ -7,6 +7,7 @@ const config: KnipConfig = {
     'src/entries/index.ts!',
     'src/entries/opencode-v2.ts!',
     'src/entries/api.ts!',
+    'src/entries/tui.ts!',
     'src/gui/frontend/main.ts!',
     'scripts/build.ts!',
     'scripts/check-comments.ts!',

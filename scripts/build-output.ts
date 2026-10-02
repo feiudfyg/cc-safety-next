@@ -3,6 +3,7 @@ export function isPublicDeclarationOutput(path: string): boolean {
     'dist/entries/index.d.ts',
     'dist/entries/api.d.ts',
     'dist/entries/opencode-v2.d.ts',
+    'dist/entries/tui.d.ts',
   ].includes(normalizeBuildPath(path));
 }
 

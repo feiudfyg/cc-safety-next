@@ -57,6 +57,8 @@ export async function verifyBuildArtifacts(): Promise<string[]> {
     'dist/index.d.ts',
     'dist/opencode-v2.d.ts',
     'dist/index.js',
+    'dist/tui.d.ts',
+    'dist/tui.js',
   ];
   const files = await listFiles(resolve('dist'));
   const unexpected = files.filter(

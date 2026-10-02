@@ -16,7 +16,12 @@ const aliasPlugin: BunPlugin = {
 
 export async function buildRuntimeBundles(outdir: string) {
   const result = await Bun.build({
-    entrypoints: ['src/entries/index.ts', 'src/entries/api.ts', 'src/entries/cli.ts'],
+    entrypoints: [
+      'src/entries/index.ts',
+      'src/entries/api.ts',
+      'src/entries/cli.ts',
+      'src/entries/tui.ts',
+    ],
     outdir,
     target: 'node',
     splitting: true,

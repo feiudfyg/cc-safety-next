@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
 import type { Plugin, PluginInput } from '@opencode-ai/plugin';
 import {
@@ -9,9 +10,22 @@ import {
   projectGuardDenial,
 } from '@/core/denial';
 import { createProcessEnvironment } from '@/core/environment';
+import { classifyDanger } from '@/core/interaction/danger';
+import {
+  clearInteraction,
+  type InteractionDecision,
+  isTuiAlive,
+  waitForInteractionDecision,
+  writeInteractionRequest,
+} from '@/core/interaction/protocol';
+import {
+  createSessionAllow,
+  interactionIdentity,
+  type SessionAllow,
+} from '@/core/interaction/session-allow';
 import { type BlockPrompts, DEFAULT_BLOCK_PROMPTS, loadBlockPrompts } from '@/core/prompts/block';
 import { shouldRecordAllowedCommands } from '@/core/policy/env';
-import { ensureSettingsFile } from '@/core/settings';
+import { ensureSettingsFile, getInteractionConfig } from '@/core/settings';
 import {
   getCommandFromToolInput,
   getNonCommandToolInputKind,
@@ -24,11 +38,7 @@ import {
   type ToolCallContext,
   type ToolRoute,
 } from '@/gate/invocation';
-import {
-  type GuardDependencies,
-  type GuardEvaluation,
-  GuardEvaluationError,
-} from '@/gate/pipeline';
+import { type GuardDependencies, GuardEvaluationError } from '@/gate/pipeline';
 import { writeIntegrationDenialAudit } from '@/hosts/audit';
 import { loadBuiltinCommands } from '@/hosts/opencode/builtin-commands/commands';
 import { evaluateRuntimeGuard } from '@/hosts/runtime';
@@ -39,6 +49,8 @@ type CCSafetyNetPluginInput = PluginInput & {
 
 const POWERSHELL_EXECUTABLES = new Set(['powershell', 'pwsh']);
 const POSIX_EXECUTABLES = new Set(['bash', 'dash', 'ksh', 'sh', 'zsh']);
+const TUI_HEARTBEAT_MAX_AGE_MS = 15_000;
+const INTERACTION_POLL_MS = 250;
 
 export function createCCSafetyNetPlugin(guardDependencies: Partial<GuardDependencies> = {}) {
   return (async ({ directory, homeDir }: CCSafetyNetPluginInput) => {
@@ -46,6 +58,7 @@ export function createCCSafetyNetPlugin(guardDependencies: Partial<GuardDependen
     const environment = createEnvironment(homeDir);
     ensureSettingsFile(environment);
     const blockPrompts = loadBlockPrompts(environment);
+    const sessionAllow = createSessionAllow();
     let currentConfig: Record<string, unknown> | undefined;
 
     return {
@@ -61,7 +74,7 @@ export function createCCSafetyNetPlugin(guardDependencies: Partial<GuardDependen
       },
 
       'tool.execute.before': async (input, output) => {
-        evaluateOpenCodeTool({
+        await evaluateOpenCodeTool({
           configCwd,
           homeDir,
           tool: input.tool,
@@ -69,6 +82,7 @@ export function createCCSafetyNetPlugin(guardDependencies: Partial<GuardDependen
           toolInput: output.args,
           route: getOpenCodeToolRoute(input.tool, resolveOpenCodeShellRoute(currentConfig?.shell)),
           blockPrompts,
+          sessionAllow,
           guardDependencies,
         });
       },
@@ -82,7 +96,7 @@ function createEnvironment(homeDir: string | undefined) {
     : { ...createProcessEnvironment(), home: homeDir };
 }
 
-export function evaluateOpenCodeTool({
+export async function evaluateOpenCodeTool({
   configCwd,
   homeDir,
   expandHomeWorkdir = false,
@@ -91,6 +105,7 @@ export function evaluateOpenCodeTool({
   toolInput,
   route,
   blockPrompts = DEFAULT_BLOCK_PROMPTS,
+  sessionAllow = createSessionAllow(),
   guardDependencies = {},
 }: {
   configCwd: string;
@@ -101,23 +116,65 @@ export function evaluateOpenCodeTool({
   toolInput: unknown;
   route: ToolRoute;
   blockPrompts?: BlockPrompts;
+  sessionAllow?: SessionAllow;
   guardDependencies?: Partial<GuardDependencies>;
-}): void {
+}): Promise<void> {
   const environment = createEnvironment(homeDir);
-  const throwPreflightDenial = (
+
+  const resolveInteraction = async (denial: IntegrationDenial): Promise<void> => {
+    const { enabled, timeoutMs } = getInteractionConfig(environment);
+    if (!enabled || !isTuiAlive(environment, TUI_HEARTBEAT_MAX_AGE_MS)) {
+      throwBlocked(denial, blockPrompts);
+    }
+    const identity = interactionIdentity(denial);
+    if (sessionAllow.isAllowed(sessionID, identity)) return;
+    const id = randomUUID();
+    writeInteractionRequest(environment, {
+      id,
+      sessionID,
+      reason: denial.reason,
+      danger: classifyDanger(denial),
+      createdAt: Date.now(),
+      toolName: denial.toolName,
+      command: denial.command,
+      segment: denial.segment,
+      ruleId: denial.ruleId,
+      cwd: denial.cwd,
+    });
+    let decision: InteractionDecision | undefined;
+    try {
+      decision = await waitForInteractionDecision(environment, id, {
+        timeoutMs,
+        pollMs: INTERACTION_POLL_MS,
+        maxAgeMs: TUI_HEARTBEAT_MAX_AGE_MS,
+      });
+    } finally {
+      clearInteraction(environment, id);
+    }
+    if (decision === 'once') return;
+    if (decision === 'session') {
+      sessionAllow.allow(sessionID, identity);
+      return;
+    }
+    throwBlocked(denial, blockPrompts);
+  };
+
+  const denyPreflight = async (
     denial: IntegrationDenial,
     toolName?: string,
     cwd: string | null = configCwd,
-  ): never => {
+  ): Promise<void> => {
     writeIntegrationDenialAudit(environment, denial, () => sessionID, {
       agent: 'opencode',
       toolName,
       cwd,
     });
-    throwBlocked(denial, blockPrompts);
+    await resolveInteraction(denial);
   };
+
   if (typeof tool !== 'string' || tool.trim() === '') {
-    throwPreflightDenial(createFailedClosedDenial());
+    await denyPreflight(createFailedClosedDenial());
+    return;
   }
 
   let command: string | undefined;
@@ -125,10 +182,11 @@ export function evaluateOpenCodeTool({
     command = getCommandFromToolInput(toolInput);
   } catch (error) {
     if (!(error instanceof ToolInputLimitError)) throw error;
-    throwPreflightDenial(createFailedClosedDenial({ toolName: tool }), tool);
+    await denyPreflight(createFailedClosedDenial({ toolName: tool }), tool);
+    return;
   }
   if (!isUsableDirectory(configCwd)) {
-    throwPreflightDenial(
+    await denyPreflight(
       createCwdDenial(
         { directory: 'session', problem: 'unusable', cwd: configCwd },
         { command, toolName: tool },
@@ -143,11 +201,11 @@ export function evaluateOpenCodeTool({
     expandHomeWorkdir ? environment.home : undefined,
   );
   if (executionCwd === null) {
-    throwPreflightDenial(createFailedClosedDenial({ command, toolName: tool }), tool);
+    await denyPreflight(createFailedClosedDenial({ command, toolName: tool }), tool);
     return;
   }
   if (typeof executionCwd !== 'string') {
-    throwPreflightDenial(
+    await denyPreflight(
       createCwdDenial(executionCwd, { command, toolName: tool }),
       tool,
       executionCwd.cwd,
@@ -167,7 +225,8 @@ export function evaluateOpenCodeTool({
         getSessionId: () => sessionID,
       },
     });
-    throwGuardDenial(evaluation, blockPrompts);
+    const denial = projectGuardDenial(evaluation, { includeEvidence: true });
+    if (denial) await resolveInteraction(denial);
   } catch (error) {
     if (!(error instanceof GuardEvaluationError)) throw error;
     if (
@@ -177,7 +236,8 @@ export function evaluateOpenCodeTool({
     ) {
       throw error.cause;
     }
-    throwGuardDenial(error.evaluation, blockPrompts);
+    const denial = projectGuardDenial(error.evaluation, { includeEvidence: true });
+    if (denial) await resolveInteraction(denial);
     return;
   }
 }
@@ -246,11 +306,6 @@ export function normalizeOpenCodeWindowsWorkdir(workdir: string): string {
     .replace(/^\/mnt\/([a-zA-Z])(?:[\\/]|$)/, (_, drive: string) => `${drive.toUpperCase()}:/`);
 
   return normalized;
-}
-
-function throwGuardDenial(evaluation: GuardEvaluation, prompts: BlockPrompts): void {
-  const denial = projectGuardDenial(evaluation, { includeEvidence: true });
-  if (denial) throwBlocked(denial, prompts);
 }
 
 function throwBlocked(denial: IntegrationDenial, prompts: BlockPrompts): never {

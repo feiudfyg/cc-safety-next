@@ -25,7 +25,7 @@ if (typesResult.exitCode !== 0) {
 for await (const path of new Bun.Glob('dist/**/*.d.ts').scan('.')) {
   if (!isPublicDeclarationOutput(path)) await Bun.file(path).delete();
 }
-for (const name of ['index', 'api', 'opencode-v2']) {
+for (const name of ['index', 'api', 'opencode-v2', 'tui']) {
   renameSync(join('dist', 'entries', `${name}.d.ts`), join('dist', `${name}.d.ts`));
 }
 

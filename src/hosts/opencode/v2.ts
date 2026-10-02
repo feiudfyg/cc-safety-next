@@ -3,6 +3,7 @@ import type { ToolHooks } from '@opencode/plugin/effect/tool';
 import { Tool } from '@opencode/schema/tool';
 import { Effect } from 'effect';
 import { createProcessEnvironment } from '@/core/environment';
+import { createSessionAllow } from '@/core/interaction/session-allow';
 import { loadBlockPrompts } from '@/core/prompts/block';
 import { ensureSettingsFile } from '@/core/settings';
 import { getNonCommandToolInputKind } from '@/core/tool-input';
@@ -29,6 +30,7 @@ export function createOpenCodeV2Plugin() {
         const environment = createProcessEnvironment();
         ensureSettingsFile(environment);
         const blockPrompts = loadBlockPrompts(environment);
+        const sessionAllow = createSessionAllow();
         const shell = ctx.options.shell ?? (process.platform === 'win32' ? 'powershell' : 'posix');
         if (shell !== 'posix' && shell !== 'powershell') {
           return yield* Effect.die(
@@ -36,7 +38,7 @@ export function createOpenCodeV2Plugin() {
           );
         }
         yield* ctx.tool.hook('execute.before', (event) =>
-          Effect.try({
+          Effect.tryPromise({
             try: () =>
               evaluateOpenCodeTool({
                 configCwd: ctx.location.directory,
@@ -49,6 +51,7 @@ export function createOpenCodeV2Plugin() {
                     ? { kind: 'command', shell }
                     : { kind: getNonCommandToolInputKind(event.tool) },
                 blockPrompts,
+                sessionAllow,
               }),
             catch: (error) =>
               new Tool.Error({ message: error instanceof Error ? error.message : String(error) }),
