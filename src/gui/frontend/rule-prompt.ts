@@ -7,7 +7,7 @@ export const rulePromptText = (prompt: {
   const names = prompt.rulesData?.rulebooks.map((rulebook) => rulebook.name) ?? [];
   return [
     'Use the cc-safety-net skill for this request.',
-    'If that skill is not available, run `npx -y cc-safety-net rule doc` first and treat its output as the source of truth for schema, paths, and validation.',
+    'If that skill is not available, run `cc-safety-net rule doc` first and treat its output as the source of truth for schema, paths, and validation.',
     '',
     prompt.rulesScope === 'project'
       ? `Scope: this project - ${prompt.projectPath.trim()}`

@@ -8,18 +8,18 @@ disable-model-invocation: true
 
 CC Safety Net runs as an OpenCode plugin and blocks destructive commands and secret access
 before they run. The `cc-safety-net` CLI inspects and controls that protection. Run it as
-`npx -y cc-safety-net`.
+`cc-safety-net`.
 
 ## Learn the current CLI
 
 The installed CLI is the authority for command syntax. Do not guess flags.
 
 ```bash
-npx -y cc-safety-net --help
-npx -y cc-safety-net help <command>
+cc-safety-net --help
+cc-safety-net help <command>
 ```
 
-Run `npx -y cc-safety-net rule doc` and treat that output as the complete source of truth for
+Run `cc-safety-net rule doc` and treat that output as the complete source of truth for
 rulebook schema, paths, GitHub sources, matching behavior, and validation.
 
 These commands are read-only and safe to run for discovery: `--help`, `--version`, `status`,
@@ -59,8 +59,8 @@ those only as part of a workflow below.
 ## Explain a decision
 
 1. Get the exact blocked command. If the user does not have it, find it with
-   `npx -y cc-safety-net logs` (narrow with `--project .`, `--agent <name>`, or `--since <days>`).
-2. Pass the exact command to `npx -y cc-safety-net explain` as one literal argument. Prefer an
+   `cc-safety-net logs` (narrow with `--project .`, `--agent <name>`, or `--since <days>`).
+2. Pass the exact command to `cc-safety-net explain` as one literal argument. Prefer an
    argv-capable tool; when invoking through a shell, shell-escape the whole command as one
    argument. Never interpolate raw command text into double quotes: `$()`, backticks, and
    variables would expand before `explain` receives it. Add `--cwd <path>` when the decision
@@ -74,8 +74,8 @@ those only as part of a workflow below.
 
 ## Triage a false positive
 
-1. List recent suspect denials with `npx -y cc-safety-net logs --suspect --since 7`, or fetch
-   one entry with `npx -y cc-safety-net logs --id <id>`.
+1. List recent suspect denials with `cc-safety-net logs --suspect --since 7`, or fetch
+   one entry with `cc-safety-net logs --id <id>`.
 2. Reproduce the decision with `explain` and read which rule fired.
 3. If a custom rule fired, fix that rulebook: disable or reword it with an override, or edit the
    rule (see configure rules), then re-run `explain` to confirm the new verdict.
@@ -101,8 +101,8 @@ intent, merge behavior, or target command is unclear.
    transparent wrapper, migrate legacy rules, or explain custom rules from the prompt when
    possible.
 3. Inspect existing configs before modifying installed local rules:
-   - Run `npx -y cc-safety-net rule verify`
-   - Run `npx -y cc-safety-net rule list`
+   - Run `cc-safety-net rule verify`
+   - Run `cc-safety-net rule list`
 4. Inspect relevant project files only when the user asks for rule suggestions or the requested
    rule depends on project context. Look at manifests, scripts, task runners, CI, infrastructure,
    database, migration, and deployment files that explain risky commands.
@@ -114,13 +114,13 @@ intent, merge behavior, or target command is unclear.
    - Do not offer to add a GitHub source with `owner/repo`; installing rules from a GitHub
      source is outside this workflow.
    - If the user explicitly asks to install existing GitHub rulebooks instead of authoring them,
-     use `npx -y cc-safety-net rule add owner/repo --only <rulebook...>`; omit `--only` only
+     use `cc-safety-net rule add owner/repo --only <rulebook...>`; omit `--only` only
      when they want every rulebook, and add `--ref <ref>` only when they name a non-default ref.
      `rule add --only <rulebook...>` with no source selects from the official
      `cc-safety-net/rulebooks` repository, whose curated rulebooks block destructive Terraform,
      AWS, gcloud, and Azure CLI operations; prefer installing one of those over authoring when it
      already covers the request.
-   - For transparent wrappers, prefer `npx -y cc-safety-net rule wrapper add` with the trusted
+   - For transparent wrappers, prefer `cc-safety-net rule wrapper add` with the trusted
      wrapper name passed as a separate argv value, or shell-escaped as one argument, over editing
      `rule.json` by hand.
 6. Preserve unrelated existing rulebook sources, overrides, and rulebooks. Preview proposed JSON
@@ -130,9 +130,9 @@ intent, merge behavior, or target command is unclear.
    `.cc-safety-net/rules/<rulebook-name>/rulebook.json`, and ensure the source name, directory
    name, and rulebook `name` match exactly.
 8. Validate after edits:
-   - User or Project rules: run `npx -y cc-safety-net rule verify` and `npx -y cc-safety-net rule
+   - User or Project rules: run `cc-safety-net rule verify` and `cc-safety-net rule
      list`. Both commands cover every scope, so neither takes `--global`.
-   - Shareable GitHub rulebook-only edits: run `npx -y cc-safety-net rule verify`. Run `list` only
+   - Shareable GitHub rulebook-only edits: run `cc-safety-net rule verify`. Run `list` only
      if the rulebook is also installed in local `rule.json`.
 9. If validation fails, show the exact errors and make the smallest fix.
 10. Confirm the saved paths or GitHub rulebook path and summarize the added or updated rules.
@@ -140,7 +140,7 @@ intent, merge behavior, or target command is unclear.
 Rule invariants:
 
 - Do not use legacy inline `.safety-net.json` or `~/.cc-safety-net/config.json` rules. Convert
-  existing legacy files with `npx -y cc-safety-net rule migrate`.
+  existing legacy files with `cc-safety-net rule migrate`.
 - Every rule command must be listed in `allowed_commands`. The `tests` fixtures are optional;
   `rule verify` evaluates `rulebook_version` 2 fixtures against the rulebook's own rules, and
   fixture commands are analyzer input that CC Safety Net never executes.
@@ -155,8 +155,8 @@ Rule invariants:
   custom rules and built-in protections stay active. Fix the file named in the diagnostic.
 - A duplicate rulebook name keeps the first claim, user scope before project scope, and ignores
   the later rulebook.
-- `npx -y cc-safety-net rule add owner/repo` fetches remote rulebooks, validates them, and vendors
-  each one into `<rulebook-name>/rulebook.json`; `npx -y cc-safety-net rule update [source]`
+- `cc-safety-net rule add owner/repo` fetches remote rulebooks, validates them, and vendors
+  each one into `<rulebook-name>/rulebook.json`; `cc-safety-net rule update [source]`
   re-fetches and overwrites those copies and prints what changed. The runtime never fetches, and a
   remote source with no vendored file reports that `rule update` has to vendor it first.
 - `rule sync` is deprecated: it only migrates lock and cache leftovers from an earlier version.
@@ -186,27 +186,27 @@ error, so validate against it rather than guessing further fields):
   `secret_protection.deny_paths`: extra paths protected like built-in secrets.
 - `audit.retention_days`: days of audit history to keep, user scope only.
 
-1. Inspect the current state: `npx -y cc-safety-net status` for the effective policy and the file
-   paths it loaded, `npx -y cc-safety-net rule list` for custom rules, plus whatever project
+1. Inspect the current state: `cc-safety-net status` for the effective policy and the file
+   paths it loaded, `cc-safety-net rule list` for custom rules, plus whatever project
    context the request depends on. Read an existing `policy.json` before proposing changes to it.
 2. Write the proposed policy JSON to an unprotected path such as `policy-proposal.json`. For
    project scope, set only the fields the team intends to control; an unset field inherits
    from the user policy, and `apply` writes only the fields the proposal sets.
    Applying replaces the target file, so the proposal is the complete policy, not a patch. Audit
    settings are user scope only; a project proposal cannot set them.
-3. Run `npx -y cc-safety-net policy check policy-proposal.json` and show the user the printed
+3. Run `cc-safety-net policy check policy-proposal.json` and show the user the printed
    diff. Add `--global` to target the user policy instead of the project one. Fix every reported
    error and re-check until it passes.
 4. Ask the user to run the apply in their own terminal and quote the exact command:
-   `npx -y cc-safety-net policy apply policy-proposal.json` (with `--global` when that is the
+   `cc-safety-net policy apply policy-proposal.json` (with `--global` when that is the
    scope). It confirms interactively, there is no `--yes` flag, and agent invocations of
    `policy apply` are blocked by design, so never run it, wrap it, or write the file yourself.
-5. Once the user confirms they applied it, run `npx -y cc-safety-net status` and report the
+5. Once the user confirms they applied it, run `cc-safety-net status` and report the
    effective policy, including any project scope deltas it prints.
 
 ## Manage the integration
 
-1. Run `npx -y cc-safety-net doctor` first. It reports the OpenCode plugin as detected,
+1. Run `cc-safety-net doctor` first. It reports the OpenCode plugin as detected,
    configured, and verified.
 2. The plugin loads from the `plugin` array in `opencode.json`/`opencode.jsonc`. This build is
    installed from a local path or a private package; there is no `install`, `update`, or
@@ -216,9 +216,9 @@ error, so validate against it rather than guessing further fields):
 
 ## Diagnose
 
-1. `npx -y cc-safety-net status` shows what the runtime enforces right now, including a degraded
+1. `cc-safety-net status` shows what the runtime enforces right now, including a degraded
    `policy.json` that `rule list` does not report.
-2. `npx -y cc-safety-net doctor` verifies the installation: plugin detection and config,
+2. `cc-safety-net doctor` verifies the installation: plugin detection and config,
    a synthetic guard self-test, and configuration scopes. Use `--json` when parsing the result.
 3. When a custom rule does not fire, run in order: `rule verify`, `rule list`, then re-test the
    command with `explain`.
@@ -229,7 +229,7 @@ For questions the CLI output cannot settle, such as why the analyzer treats a co
 certain way or whether a gap is a known limitation, read the source code of the installed
 version.
 
-1. Get `<version>` from `npx -y cc-safety-net --version`.
+1. Get `<version>` from `cc-safety-net --version`.
 2. Locate the repository. Plugin installs ship the full repository, and this skill file lives
    at `<repo>/skills/cc-safety-net/SKILL.md` inside it, so the repository root is two
    directories above the skill file. Use the candidate only if its `package.json` has

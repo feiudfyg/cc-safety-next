@@ -210,7 +210,7 @@ describe('rule verify', () => {
     expect(outcome.report).toContain('  Status: ignored by CC Safety Net');
     expect(outcome.report).toContain('    1. no-force-push');
     expect(outcome.report).toContain(
-      'Warning: Legacy user config is ignored by CC Safety Net. Run `npx -y cc-safety-net rule migrate`.',
+      'Warning: Legacy user config is ignored by CC Safety Net. Run `cc-safety-net rule migrate`.',
     );
     expect(outcome.report).toContain('\nConfigs valid with warnings.');
   });
@@ -233,7 +233,7 @@ describe('rule verify', () => {
     expect(outcome.code).toBe(0);
     expect(outcome.report).toContain('  Sources: (none)');
     expect(outcome.report).toContain(
-      'Warning: Legacy user config is no longer needed. Run `npx -y cc-safety-net rule migrate --cleanup` to clean it up safely.',
+      'Warning: Legacy user config is no longer needed. Run `cc-safety-net rule migrate --cleanup` to clean it up safely.',
     );
   });
 
@@ -244,7 +244,7 @@ describe('rule verify', () => {
       `✗ Legacy project config: ${posix.join('<root>', 'project', '.safety-net.json')}`,
     );
     expect(outcome.report).toContain(
-      'Warning: Legacy project config is ignored by CC Safety Net. Run `npx -y cc-safety-net rule migrate`.',
+      'Warning: Legacy project config is ignored by CC Safety Net. Run `cc-safety-net rule migrate`.',
     );
   });
 

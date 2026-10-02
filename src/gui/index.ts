@@ -3,7 +3,6 @@ import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { parseCommandArgs } from '@/cli/args';
-import { getActivitySummary } from '@/cli/doctor/activity';
 import { checkForUpdates } from '@/cli/doctor/updates';
 import { createProcessEnvironment, type Environment } from '@/core/environment';
 import {
@@ -59,13 +58,6 @@ import { renderPolicyGuiHtml } from './page';
 
 const DEFAULT_ACTIVITY_DAYS = 7;
 
-/** @internal */
-export interface StarContext {
-  starred: boolean | null;
-  starCount: number | null;
-  blockedTotal: number;
-}
-
 interface IntegrationsStatus {
   targets: {
     target: string;
@@ -101,7 +93,6 @@ const PROJECT_AUDIT_REJECTION =
 
 interface PolicyGuiServerOptions extends Partial<RulesPolicyOptions> {
   chooseDirectory?: () => Promise<ChooseDirectoryResult>;
-  fetchStarContext?: () => Promise<StarContext>;
   fetchIntegrations?: () => Promise<IntegrationsStatus>;
   fetchHealth?: () => Promise<HealthStatus>;
   activityLogsDir?: string;
@@ -396,18 +387,6 @@ async function handleRequest(
     return;
   }
 
-  if (request.method === 'GET' && url.pathname === '/api/star/context') {
-    sendJson(
-      response,
-      200,
-      await (
-        options.fetchStarContext ??
-        (() => fetchStarContext(environment, { logsDir: options.activityLogsDir }))
-      )(),
-    );
-    return;
-  }
-
   if (request.method === 'GET' && url.pathname === '/api/integrations') {
     sendJson(
       response,
@@ -687,17 +666,4 @@ export async function fetchHealth(
       updateAvailable: update.updateAvailable,
     },
   };
-}
-
-/** @internal */
-export function fetchStarContext(
-  environment: Environment,
-  options: { logsDir?: string } = {},
-): Promise<StarContext> {
-  return Promise.resolve({
-    starred: true,
-    starCount: null,
-    blockedTotal: getActivitySummary(environment, readRetentionDays(environment), options.logsDir)
-      .totalBlocked,
-  });
 }

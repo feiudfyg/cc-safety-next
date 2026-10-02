@@ -193,12 +193,12 @@ function getLegacyRulesConfigWarning(
 ): string {
   const label = `legacy ${scope} config`;
   if (action === 'cleanup') {
-    return `Warning: Legacy ${scope} config is no longer needed. Run \`npx -y cc-safety-net rule migrate --cleanup\` to clean it up safely.`;
+    return `Warning: Legacy ${scope} config is no longer needed. Run \`cc-safety-net rule migrate --cleanup\` to clean it up safely.`;
   }
   if (action === 'migrate') {
-    return `Warning: Legacy ${scope} config is ignored by CC Safety Net. Run \`npx -y cc-safety-net rule migrate\`.`;
+    return `Warning: Legacy ${scope} config is ignored by CC Safety Net. Run \`cc-safety-net rule migrate\`.`;
   }
-  return `Warning: Legacy ${scope} config is no longer supported. Fix or delete the ${label}, then run \`npx -y cc-safety-net rule migrate\`.`;
+  return `Warning: Legacy ${scope} config is no longer supported. Fix or delete the ${label}, then run \`cc-safety-net rule migrate\`.`;
 }
 
 function getGitHubSourceRulesValidation(

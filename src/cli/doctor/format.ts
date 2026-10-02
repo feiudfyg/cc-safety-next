@@ -333,8 +333,8 @@ export function formatUpdateSection(update: UpdateInfo): string {
       ]),
     );
     lines.push('');
-    lines.push('   Run: bunx cc-safety-net@latest doctor');
-    lines.push('   Or:  npx cc-safety-net@latest doctor');
+    lines.push('   Run: bun run cc-safety-net doctor');
+    lines.push('   Or:  node dist/bin/cc-safety-net.js doctor');
     return lines.join('\n');
   }
 

@@ -7,10 +7,10 @@ import { runGit, withTempDir } from '../helpers';
 const checkCommentsScript = join(import.meta.dir, '../../scripts/check-comments.ts');
 
 const SAY_IT_IN_CODE =
-  'Make the code say it with a clearer name, a named value or a type, and delete the comment. Only the maintainer adds entries to scripts/comment-allowlist.json, for facts about external tools the code cannot express. Fix each one by following .agents/skills/ccsn-no-comments/SKILL.md.';
+  'Make the code say it with a clearer name, a named value or a type, and delete the comment. Only the maintainer adds entries to scripts/comment-allowlist.json, for facts about external tools the code cannot express.';
 
 const FIX_STALE_ENTRIES =
-  "A stale entry's comment is gone, edited, moved to another file or hidden by a syntax error. Fix each one by following .agents/skills/ccsn-no-comments/SKILL.md.";
+  "A stale entry's comment is gone, edited, moved to another file or hidden by a syntax error. Remove the stale entry.";
 
 function commentTexts(path: string, text: string) {
   return checkComments([{ path, text }], {}).disallowedComments.map((comment) => comment.text);

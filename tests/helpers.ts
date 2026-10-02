@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { listAuditLogFiles } from '@/audit/reader';
 import type { AuditLogEntry } from '@/core/audit';
-import type { VersionFetcher } from '@/hosts/system-info';
 import { withProcessEnv } from './helpers/temp-home';
 
 export function readAuditLogEntriesForSession(homeDir: string, sessionId: string): AuditLogEntry[] {
@@ -55,52 +54,6 @@ export async function withTempDir<T>(prefix: string, fn: (dir: string) => T | Pr
     rmSync(dir, { recursive: true, force: true });
   }
 }
-
-/** @internal */
-export const mockVersionFetcher: VersionFetcher = async (args: string[]) => {
-  if (args[0] === 'claude' && args[1] === 'plugin') {
-    return `Installed plugins:
-
-  ❯ cc-safety-net@cc-marketplace
-    Version: 0.8.2
-    Scope: user
-    Status: ✔ enabled`;
-  }
-
-  if (args[0] === 'codex' && args[1] === 'plugin') {
-    return 'cc-safety-net https://github.com/kenryu42/cc-safety-net.git installed, enabled';
-  }
-
-  if (args[0] === 'copilot' && args[1] === 'plugin') {
-    return 'Installed plugins:\n  • copilot-safety-net (v1.0.0)';
-  }
-
-  if (args[0] === 'gemini' && args[1] === 'extensions') {
-    return `✓ gemini-safety-net (1.0.0)
- Source: https://github.com/kenryu42/gemini-safety-net (Type: github-release)
- Enabled (User): true
- Enabled (Workspace): true`;
-  }
-
-  const cmd = args[0];
-  const mockVersions: Record<string, string> = {
-    claude: '1.0.0',
-    agy: 'Antigravity CLI v2.0.0',
-    opencode: '0.1.0',
-    codex: 'codex 1.2.0',
-    gemini: '0.20.0',
-    hermes: 'hermes 1.5.0',
-    openclaw: 'openclaw 2026.8.1',
-    grok: 'grok 1.1.0',
-    kimi: 'kimi 0.3.0',
-    pi: 'pi 0.4.0',
-    copilot: 'Copilot binary version: 1.0.9',
-    node: 'v22.0.0',
-    npm: '10.0.0',
-    bun: '1.0.0',
-  };
-  return mockVersions[cmd ?? ''] ?? null;
-};
 
 function toShellPath(p: string): string {
   return p.replace(/\\/g, '/');

@@ -171,7 +171,6 @@ describe('the policy GUI server', () => {
       '/api/policy/project',
       '/api/activity',
       '/api/rules',
-      '/api/star/context',
       '/api/integrations',
       '/api/health',
     ];
@@ -185,22 +184,16 @@ describe('the policy GUI server', () => {
       '/api/policy/project/diff',
       '/api/policy/project/apply',
       '/api/rules/choose-directory',
-      '/api/star',
-      '/api/install',
-      '/api/uninstall',
     ];
     const row = await runGuiRow({
       seed: S1,
       options: () => ({
         chooseDirectory: async () => ({ cancelled: true }),
-        starRepo: async () => ({ ok: true }),
-        fetchStarContext: async () => ({ starred: null, starCount: null, blockedTotal: 0 }),
         fetchIntegrations: async () => ({
           targets: [],
           system: { version: 'dev', nodeVersion: null, platform: 'linux' },
         }),
         fetchHealth: async () => ({ update: { latestVersion: null, updateAvailable: false } }),
-        runIntegration: async () => ({ ok: true, output: '' }),
       }),
       requests: [
         ...reads.map((path): GuiRequest => ({ path, token: 'none' })),

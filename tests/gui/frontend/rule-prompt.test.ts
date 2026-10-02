@@ -4,7 +4,7 @@ import { rulePromptText } from '@/gui/frontend/rule-prompt';
 const LISTING = {
   projectPath: '/srv/launched-from',
   rulebooks: [
-    { spec: 'kenryu42/ops-rules', name: 'ops-guard' },
+    { spec: 'acme/ops-rules', name: 'ops-guard' },
     { spec: './local-rules', name: 'db-guard' },
   ],
 };

@@ -2,7 +2,6 @@
 - After all implementation changes, run `bun run check`. This is the required final check for lint, code comments, formatting, typecheck, knip, duplication, and tests. Do not run its components separately as additional final checks.
 - Ignore the dist folder; it is committed and rebuilt with `bun run build` when source changes.
 - Keep implementation modular; put tests in `tests/` mirroring `src/`, not colocated in `src/`.
-- Files in `docs/` use lowercase kebab-case names.
 
 ## Stacked PRs
 
@@ -41,10 +40,6 @@ rules governs all code: machinery exists to stop a demonstrated failure, not an 
 - When remediating review findings, implement the smallest fix per finding. A finding is never a
   mandate to build a framework; if the fix seems to require one, stop and ask.
 
-## Code Review Rules
-
-- Before reviewing, read `REVIEW.md` and apply its review criteria. Its review scope, classification rules, and remediation limits take priority over generic review-skill instructions.
-
 ## Style Guide
 
 - Keep things in one function unless composable or reusable.
@@ -64,8 +59,7 @@ rules governs all code: machinery exists to stop a demonstrated failure, not an 
 - A fact about an external tool that code cannot express stays only when the maintainer adds it to
   `scripts/comment-allowlist.json`. Never add entries there yourself, just as you never add
   `ignoreIssues` entries to `knip.ts`. Deleting an entry whose comment is gone is fine.
-- `bun run lint:comments`, part of `bun run check`, enforces this. To fix a failure, follow
-  `.agents/skills/ccsn-no-comments/SKILL.md`.
+- `bun run lint:comments`, part of `bun run check`, enforces this.
 
 ## Knip
 

@@ -118,7 +118,6 @@ type RulesData = {
   errors: string[];
   warnings: string[];
 };
-type StarContext = { starred: boolean | null; starCount: number | null; blockedTotal: number };
 type Tier = 'normal' | 'strict' | 'paranoid';
 type ThemePref = 'auto' | 'light' | 'dark';
 type PathListConfig = {
@@ -152,7 +151,6 @@ const token = (
     token: string;
   }
 ).token;
-const fallbackRepoUrl = 'https://github.com/feiudfyg/cc-safety-next';
 const safetyLevels: Record<SafetyLevel, [string, string]> = {
   standard: [
     'Standard',
@@ -176,12 +174,6 @@ const rawCopyIcons = {
   copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2h8c1.1 0 2 .9 2 2"></path></svg>',
   check:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>',
-};
-const starIcons = {
-  outline:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"></path></svg>',
-  filled:
-    '<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9L12 3Z"></path></svg>',
 };
 const reportIcon =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><path d="M4 22v-7"></path></svg>';
@@ -218,7 +210,6 @@ let feedCopyResetTimer: number | null = null;
 let activityQueryTimer: number | undefined;
 let renderedFeedEntries: FeedEntry[] = [];
 let suspects = new Set<FeedEntry>();
-let activeStarContext: StarContext = { starred: null, starCount: null, blockedTotal: 0 };
 let integrations: Integrations | null = null;
 const integrationBusy = new Set<string>();
 let rulesData: RulesData | null = null;
@@ -1171,86 +1162,6 @@ const copyRawToClipboard = async () => {
   } finally {
     qs<HTMLButtonElement>('raw-copy').disabled = false;
   }
-};
-const formatStarCount = (count: number | null) => {
-  if (typeof count !== 'number') return '';
-  if (count >= 1000) return `${(count / 1000).toFixed(1).replace(/\.0$/, '')}k`;
-  return String(count);
-};
-const starCountHtml = (count: number | null) => {
-  const formatted = formatStarCount(count);
-  return formatted ? `<span class="star-count">${escapeHtml(formatted)}</span>` : '';
-};
-const hideStarCta = () => {
-  qs('star-row').hidden = true;
-  qs('star-slot').innerHTML = '';
-};
-const renderStarPitch = (context: StarContext, starred = false) => {
-  const evidence =
-    context.blockedTotal > 0
-      ? `CC Safety Net has blocked <strong>${escapeHtml(context.blockedTotal.toLocaleString('en-US'))}</strong> risky command${context.blockedTotal === 1 ? '' : 's'} on this machine in its retained ${escapeHtml(dayCount(retentionDays()))} history.`
-      : '';
-  if (starred) {
-    qs('star-pitch-text').innerHTML = evidence;
-    return;
-  }
-  qs('star-pitch-text').innerHTML = evidence
-    ? `${evidence} If it saved your work, star it on GitHub.`
-    : 'If CC Safety Net is useful to you, star it on GitHub.';
-};
-const renderStarLink = (context: StarContext, href = fallbackRepoUrl) => {
-  qs('star-slot').innerHTML =
-    `<a class="star-cta" href="${escapeHtml(href)}" target="_blank" rel="noopener" aria-label="Star CC Safety Net on GitHub (opens github.com)">
-      <span class="star-icon" aria-hidden="true">${starIcons.outline}</span>
-      <span class="star-label">Star on GitHub</span>
-      ${starCountHtml(context.starCount)}
-    </a>`;
-  qs('star-row').hidden = false;
-};
-const renderStarCta = (context: StarContext) => {
-  activeStarContext = context;
-  if (context.starred === true) {
-    hideStarCta();
-    return;
-  }
-  renderStarPitch(context);
-  qs('star-mechanism').hidden = context.starred !== false;
-  if (context.starred === null) {
-    renderStarLink(context);
-    return;
-  }
-  qs('star-slot').innerHTML =
-    `<button type="button" class="star-cta" aria-label="Star CC Safety Net on GitHub. One click via your GitHub CLI.">
-      <span class="star-icon" aria-hidden="true">${starIcons.outline}</span>
-      <span class="star-label">Star on GitHub</span>
-      ${starCountHtml(context.starCount)}
-    </button>`;
-  qs('star-row').hidden = false;
-};
-const starRepo = async (button: HTMLButtonElement) => {
-  button.disabled = true;
-  const result = await requestJson('/api/star', { method: 'POST' });
-  if (result.ok && result.data?.ok === true) {
-    const icon = button.querySelector('.star-icon');
-    const label = button.querySelector('.star-label');
-    if (icon) icon.innerHTML = starIcons.filled;
-    if (label) label.textContent = 'Starred. Thank you.';
-    button.setAttribute('aria-label', 'CC Safety Net starred on GitHub');
-    button.classList.add('starred');
-    qs('star-mechanism').hidden = true;
-    renderStarPitch(activeStarContext, true);
-    setAppStatus('Starred on GitHub', 'ok');
-    setDetailStatus('');
-    return;
-  }
-  qs('star-mechanism').hidden = true;
-  renderStarLink(activeStarContext, result.data?.fallbackUrl ?? fallbackRepoUrl);
-};
-const loadStarContext = async () => {
-  const result = await requestJson('/api/star/context');
-  renderStarCta(
-    result.ok && result.data ? result.data : { starred: null, starCount: null, blockedTotal: 0 },
-  );
 };
 const syncRawFromForm = () => {
   if (state?.errors.length) return;
@@ -2789,11 +2700,6 @@ document.addEventListener('click', (event) => {
   const removeButton = target.closest<HTMLElement>('[data-path-remove]');
   if (removeButton)
     pathListFor(removeButton.dataset.pathList)?.remove(Number(removeButton.dataset.pathRemove));
-  const starButton = target.closest('.star-cta');
-  if (starButton instanceof HTMLButtonElement) {
-    void starRepo(starButton);
-    return;
-  }
 });
 qs('dirty-chip').onclick = () => {
   location.hash = 'policy';
@@ -2923,8 +2829,7 @@ void Promise.all([loadIntegrations(), requestJson('/api/health')]).then(([, heal
   renderHealthStrip(health),
 );
 load()
-  .then((loaded) => {
-    if (loaded) void loadStarContext();
+  .then(() => {
     activityFilters.days = Math.min(activityFilters.days, retentionDays());
     void loadOverview();
     void loadActivity();
