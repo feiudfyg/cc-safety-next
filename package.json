@@ -54,7 +54,6 @@
     "knip": "knip-bun --production",
     "check-duplicates": "jscpd src tests --threshold 0 --exit-code 1 --no-tips --reporters ai --ignore '**/*.svg' --ignore-pattern 'import\\s[\\s\\S]*?from\\s[^;]*;'",
     "test": "bun test",
-    "test:e2e:stability": "bun test tests/e2e --randomize --rerun-each 3",
     "test:coverage": "AGENT=1 bun test tests --coverage --coverage-reporter=text --coverage-reporter=lcov",
     "cc-safety-net": "bun run src/entries/bin.ts",
     "lint:fix": "oxlint --fix src tests scripts knip.ts",

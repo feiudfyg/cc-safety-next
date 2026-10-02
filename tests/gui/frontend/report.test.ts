@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { buildReportRequest, scrubReportPaths } from '@/gui/frontend/report';
 
-const ISSUE_URL = 'https://local/cc-safety-net/issues/new?template=false_positive.yml';
+const ISSUE_URL = 'https://github.com/feiudfyg/cc-safety-next/issues/new';
 
 describe('the false-positive report', () => {
   test('scrubs the project path before the home it sits under', () => {
@@ -31,8 +31,7 @@ describe('the false-positive report', () => {
     );
 
     expect(buildReportRequest({}).url).toBe(ISSUE_URL);
-    expect(url.origin + url.pathname).toBe('https://local/cc-safety-net/issues/new');
-    expect(url.searchParams.get('template')).toBe('false_positive.yml');
+    expect(url.origin + url.pathname).toBe('https://github.com/feiudfyg/cc-safety-next/issues/new');
     expect(url.searchParams.get('command')).toBe('rm -rf /tmp/x');
     expect(url.searchParams.get('why')).toBe('test');
     expect(url.searchParams.has('reason')).toBeFalse();

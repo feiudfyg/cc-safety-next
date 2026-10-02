@@ -1,35 +1,12 @@
 # --- Project Specific ---
-.cursor
-.claude/*
-!.claude/skills
-.claude/skills/*
-!.claude/skills/ccsn-find-simplifications
-!.claude/skills/ccsn-no-comments
-!.claude/skills/release-notes
-!.claude/skills/verify-cc-safety-net
-.agents/*
-!.agents/setup
-!.agents/resume
-!.agents/skills
-.agents/skills/*
-!.agents/skills/ccsn-find-simplifications
-!.agents/skills/ccsn-no-comments
-!.agents/skills/verify-cc-safety-net
 .safety-net.json
 .opencode
-.gemini
-.factory
-artifacts
 .cc-safetynet-rules
 .cc-safety-net
-.amp/github-issue-events/
-.amp/github-issues-webhook.json
+artifacts
 coverage
-.codex
 .playwright
 .playwright-cli
-.factory
-codex-security-scans
 
 # --- Node.js ---
 node_modules
@@ -40,8 +17,5 @@ plans
 DESIGN.md
 PRODUCT.md
 research
-
-# plugin eval run output
-evals/results/
 
 skills-lock.json

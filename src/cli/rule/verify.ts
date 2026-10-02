@@ -24,7 +24,8 @@ import { evaluateRulebookFixtures } from '@/gate/rulebook-fixtures';
 
 const VERIFY_HEADER = 'CC Safety Net Config';
 const VERIFY_SEPARATOR = '═'.repeat(VERIFY_HEADER.length);
-const RULES_SCHEMA_URL = 'https://local/cc-safety-net/assets/cc-safety-net.schema.json';
+const RULES_SCHEMA_URL =
+  'https://raw.githubusercontent.com/feiudfyg/cc-safety-next/main/assets/cc-safety-net.schema.json';
 const RULES_DIR_RESERVED_ENTRIES = new Set(['rule.json', 'rule.lock', 'cache']);
 
 type RulesConfigSchemaKind = 'rules' | 'legacy';
