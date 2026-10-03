@@ -23,8 +23,13 @@ bun run build
 
 ## Install into OpenCode
 
-Point the `plugin` array in your OpenCode config at this repository. The built `dist/` is
-loaded directly, including the TUI entrypoint used by the interactive override dialog:
+OpenCode loads two independent plugin kinds: **server** plugins come from `opencode.json`,
+and **TUI** plugins come from a separate `tui.json`. Register this plugin in both files so
+that blocking runs on the server and the interactive override dialog runs in the TUI.
+
+Add an absolute path (or a `file://` URL) to the global config:
+
+`~/.config/opencode/opencode.json`
 
 ```json
 {
@@ -32,18 +37,43 @@ loaded directly, including the TUI entrypoint used by the interactive override d
 }
 ```
 
-Rebuild (`bun run build`) whenever you change the source.
+`~/.config/opencode/tui.json`
+
+```json
+{
+  "plugin": ["/absolute/path/to/cc-safety-next"]
+}
+```
+
+On Windows use forward slashes, for example `"E:/CodeProjects/cc-safety-next"`. Project-level
+config (`opencode.json` and `tui.json` beside it) works the same way.
+
+- The `opencode.json` entry is the actual guard: it blocks destructive commands and secret
+  access before a tool call runs.
+- The `tui.json` entry loads the override dialog. If you register only the server entry, every
+  block stays non-interactive and the command is simply denied.
+- Restart OpenCode after editing either file. Running instances do not pick up plugin changes.
+
+Because the built `dist/` is loaded directly, run `bun run build` whenever you change the source.
 
 ## Configuration
 
 The plugin keeps its config in `~/.cc-safety-net` (override the directory with
-`CC_SAFETY_NET_HOME`). `settings.json` is generated on first run:
+`CC_SAFETY_NET_HOME`). `settings.json` is generated on first run with `temp_dir` and
+`prompts_dir`:
 
 ```json
 {
   "temp_dir": "<OS temp dir>",
-  "prompts_dir": "prompts",
-  "interaction": true,
+  "prompts_dir": "prompts"
+}
+```
+
+Two optional keys can be added by hand:
+
+```json
+{
+  "interaction": false,
   "interaction_timeout_seconds": 120
 }
 ```
