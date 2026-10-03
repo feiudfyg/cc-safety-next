@@ -90,15 +90,15 @@ empty file falls back to the default.
 
 ## Interactive override
 
-When a command is blocked and a TUI is running, the plugin shows a danger-colored toast and a
-dialog with:
+When a command is blocked and a TUI is running, the plugin shows a dialog whose header names the
+specific rule that fired (for example, a forced `git checkout` or a protected `.git` path) and,
+under it, the blocked call shortened to one line. The options are:
 
-- **单次放行** — allow this call once.
-- **本次会话放行** — allow matching blocks for the rest of the session.
-- **拒绝** — keep blocking.
+- **Allow once** — allow this call one time.
+- **Allow for this session** — allow identical blocks for the rest of the session.
+- **Reject** — keep blocking.
 
-The color reflects the risk (high → red, medium → yellow, low → blue). Without a live TUI, or
-with `interaction` disabled, the command is blocked as usual.
+Without a live TUI, or with `interaction` disabled, the command is blocked as usual.
 
 ## Safety presets
 

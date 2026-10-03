@@ -29,7 +29,6 @@ function request(id: string, createdAt = 0) {
     id,
     sessionID: 's1',
     reason: 'blocked',
-    danger: 'high' as const,
     createdAt,
   };
 }

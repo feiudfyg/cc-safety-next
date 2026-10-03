@@ -10,7 +10,6 @@ import {
   projectGuardDenial,
 } from '@/core/denial';
 import { createProcessEnvironment } from '@/core/environment';
-import { classifyDanger } from '@/core/interaction/danger';
 import {
   clearInteraction,
   type InteractionDecision,
@@ -40,6 +39,7 @@ import {
 } from '@/gate/invocation';
 import { type GuardDependencies, GuardEvaluationError } from '@/gate/pipeline';
 import { writeIntegrationDenialAudit } from '@/hosts/audit';
+import { describeBlockReason } from '@/hosts/opencode/block-reason';
 import { loadBuiltinCommands } from '@/hosts/opencode/builtin-commands/commands';
 import { evaluateRuntimeGuard } from '@/hosts/runtime';
 
@@ -132,8 +132,7 @@ export async function evaluateOpenCodeTool({
     writeInteractionRequest(environment, {
       id,
       sessionID,
-      reason: denial.reason,
-      danger: classifyDanger(denial),
+      reason: describeBlockReason(denial),
       createdAt: Date.now(),
       toolName: denial.toolName,
       command: denial.command,

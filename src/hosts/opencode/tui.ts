@@ -1,5 +1,4 @@
 import { type Environment, createProcessEnvironment } from '@/core/environment';
-import { dangerLabel, dangerToastVariant } from '@/core/interaction/danger';
 import {
   clearInteraction,
   type InteractionDecision,
@@ -10,8 +9,6 @@ import {
 } from '@/core/interaction/protocol';
 import { getInteractionConfig } from '@/core/settings';
 
-type ToastVariant = 'info' | 'success' | 'warning' | 'error';
-
 type DialogOption = {
   title: string;
   value: InteractionDecision;
@@ -21,12 +18,6 @@ type DialogOption = {
 /** @internal */
 export type TuiApi = {
   ui: {
-    toast: (input: {
-      variant?: ToastVariant;
-      title?: string;
-      message: string;
-      duration?: number;
-    }) => void;
     dialog: {
       replace: (render: () => unknown, onClose?: () => void) => void;
       clear: () => void;
@@ -44,12 +35,28 @@ export type TuiApi = {
 };
 
 const STALE_MARGIN_MS = 15 * 1000;
+const MAX_CALL_LENGTH = 160;
 
 const DECISIONS: DialogOption[] = [
-  { title: '单次放行', value: 'once', description: '只允许这一次操作' },
-  { title: '本次会话放行', value: 'session', description: '本会话内相同的拦截不再询问' },
-  { title: '拒绝', value: 'reject', description: '维持拦截' },
+  { title: 'Allow once', value: 'once', description: 'Run this command one time.' },
+  {
+    title: 'Allow for this session',
+    value: 'session',
+    description: 'Allow identical blocks until this session ends.',
+  },
+  { title: 'Reject', value: 'reject', description: 'Keep blocking this command.' },
 ];
+
+/** @internal */
+export function formatBlockedCall(request: InteractionRequest): string {
+  const raw = request.command ?? request.segment ?? '';
+  const singleLine = raw.replace(/\s+/g, ' ').trim();
+  const shortened =
+    singleLine.length > MAX_CALL_LENGTH
+      ? `${singleLine.slice(0, MAX_CALL_LENGTH - 1)}…`
+      : singleLine;
+  return request.toolName ? `${request.toolName}: ${shortened}` : shortened;
+}
 
 /** @internal */
 export function createTuiController(api: TuiApi, environment: Environment, pollIntervalMs = 1000) {
@@ -64,17 +71,12 @@ export function createTuiController(api: TuiApi, environment: Environment, pollI
   };
 
   const askUser = (request: InteractionRequest) => {
-    api.ui.toast({
-      variant: dangerToastVariant(request.danger),
-      title: `CC Safety Net · ${dangerLabel(request.danger)}`,
-      message: request.command ?? request.reason,
-      duration: 8000,
-    });
+    const call = formatBlockedCall(request);
     api.ui.dialog.replace(
       () =>
         api.ui.DialogSelect({
-          title: `CC Safety Net 拦截 · ${dangerLabel(request.danger)}`,
-          placeholder: request.reason,
+          title: request.reason,
+          ...(call ? { placeholder: call } : {}),
           options: DECISIONS,
           onSelect: (option) => settle(request.id, option.value),
         }),

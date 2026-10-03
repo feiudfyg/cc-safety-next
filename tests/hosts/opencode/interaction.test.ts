@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTestEnvironment, type Environment } from '@/core/environment';
+import { REASON_SAFETY_NET_FAILED_CLOSED } from '@/core/budget';
 import {
   listInteractionRequests,
   touchTuiHeartbeat,
@@ -76,7 +77,7 @@ describe('OpenCode block interaction', () => {
 
     const request = await waitForRequest();
     if (!request) throw new Error('interaction request was not written');
-    expect(request.danger).toBe('high');
+    expect(request.reason).toBe(REASON_SAFETY_NET_FAILED_CLOSED);
     writeInteractionResponse(environment, { id: request.id, decision: 'once' });
 
     await expect(pending).resolves.toBeUndefined();

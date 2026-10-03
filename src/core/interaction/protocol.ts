@@ -12,7 +12,6 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { Environment } from '@/core/environment';
 import { redactSecrets } from '@/core/redaction';
 import { getPluginTempDir } from '@/core/settings';
-import type { DangerLevel } from './danger';
 
 export type InteractionDecision = 'once' | 'session' | 'reject';
 
@@ -20,7 +19,6 @@ export type InteractionRequest = {
   id: string;
   sessionID: string;
   reason: string;
-  danger: DangerLevel;
   createdAt: number;
   toolName?: string;
   command?: string;
