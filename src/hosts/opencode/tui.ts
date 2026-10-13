@@ -1,3 +1,4 @@
+import type { Plugin as TuiPlugin } from '@opencode/plugin/tui';
 import { type Environment, createProcessEnvironment } from '@/core/environment';
 import {
   clearInteraction,
@@ -9,35 +10,28 @@ import {
 } from '@/core/interaction/protocol';
 import { getInteractionConfig } from '@/core/settings';
 
-type DialogOption = {
+type DecisionOption = {
   title: string;
   value: InteractionDecision;
-  description?: string;
+  description: string;
 };
 
 /** @internal */
-export type TuiApi = {
-  ui: {
-    dialog: {
-      replace: (render: () => unknown, onClose?: () => void) => void;
-      clear: () => void;
-    };
-    DialogSelect: (props: {
+export type TuiUi = {
+  dialog: {
+    select: <Value>(options: {
       title: string;
       placeholder?: string;
-      options: DialogOption[];
-      onSelect?: (option: DialogOption) => void;
-    }) => unknown;
-  };
-  lifecycle?: {
-    onDispose?: (fn: () => void) => void;
+      options: readonly { title: string; value: Value; description?: string }[];
+    }) => Promise<Value | undefined>;
+    clear: () => void;
   };
 };
 
 const STALE_MARGIN_MS = 15 * 1000;
 const MAX_CALL_LENGTH = 160;
 
-const DECISIONS: DialogOption[] = [
+const DECISIONS: DecisionOption[] = [
   { title: 'Allow once', value: 'once', description: 'Run this command one time.' },
   {
     title: 'Allow for this session',
@@ -59,7 +53,11 @@ export function formatBlockedCall(request: InteractionRequest): string {
 }
 
 /** @internal */
-export function createTuiController(api: TuiApi, environment: Environment, pollIntervalMs = 1000) {
+export function createTuiController(
+  api: { ui: TuiUi },
+  environment: Environment,
+  pollIntervalMs = 1000,
+) {
   let activeId: string | undefined;
   const decided = new Set<string>();
 
@@ -67,21 +65,16 @@ export function createTuiController(api: TuiApi, environment: Environment, pollI
     if (id !== activeId || decided.has(id)) return;
     decided.add(id);
     writeInteractionResponse(environment, { id, decision });
-    api.ui.dialog.clear();
   };
 
-  const askUser = (request: InteractionRequest) => {
+  const askUser = async (request: InteractionRequest) => {
     const call = formatBlockedCall(request);
-    api.ui.dialog.replace(
-      () =>
-        api.ui.DialogSelect({
-          title: request.reason,
-          ...(call ? { placeholder: call } : {}),
-          options: DECISIONS,
-          onSelect: (option) => settle(request.id, option.value),
-        }),
-      () => settle(request.id, 'reject'),
-    );
+    const decision = await api.ui.dialog.select<InteractionDecision>({
+      title: request.reason,
+      ...(call ? { placeholder: call } : {}),
+      options: DECISIONS,
+    });
+    settle(request.id, decision ?? 'reject');
   };
 
   const clearActiveDialog = () => {
@@ -107,19 +100,28 @@ export function createTuiController(api: TuiApi, environment: Environment, pollI
       clearActiveDialog();
       return;
     }
-    if (activeId === next.id) return;
+    if (activeId === next.id || decided.has(next.id)) return;
     activeId = next.id;
-    askUser(next);
+    void askUser(next);
   };
 
   tick();
   const timer = setInterval(tick, pollIntervalMs);
-  return { tick, dispose: () => clearInterval(timer) };
+  return {
+    tick,
+    dispose: () => {
+      clearInterval(timer);
+      clearActiveDialog();
+    },
+  };
 }
 
-export function createCCSafetyNetTuiPlugin(pollIntervalMs = 1000) {
-  return async (api: TuiApi): Promise<void> => {
-    const controller = createTuiController(api, createProcessEnvironment(), pollIntervalMs);
-    api.lifecycle?.onDispose?.(controller.dispose);
+export function createCCSafetyNetTuiPlugin(pollIntervalMs = 1000): TuiPlugin.Definition {
+  return {
+    id: 'cc-safety-net',
+    setup(ctx) {
+      const controller = createTuiController(ctx, createProcessEnvironment(), pollIntervalMs);
+      return controller.dispose;
+    },
   };
 }

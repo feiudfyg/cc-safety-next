@@ -13,11 +13,11 @@ function createRoot(): string {
   return root;
 }
 
-function writeConfig(home: string, plugin: unknown): string {
+function writeConfig(home: string, plugin: unknown, key = 'plugin'): string {
   const configDir = join(home, '.config', 'opencode');
   mkdirSync(configDir, { recursive: true });
   const configPath = join(configDir, 'opencode.json');
-  writeFileSync(configPath, JSON.stringify({ plugin }, null, 2));
+  writeFileSync(configPath, JSON.stringify({ [key]: plugin }, null, 2));
   return configPath;
 }
 
@@ -42,6 +42,16 @@ describe('OpenCode plugin detection', () => {
   test('recognizes the published package spec', () => {
     const home = createRoot();
     writeConfig(home, ['cc-safety-net@latest']);
+
+    const detection = detect(contextFor(home));
+
+    expect(detection.status).toBe('configured');
+    expect(detection.method).toBe('plugin array');
+  });
+
+  test('recognizes the v2 plugins array', () => {
+    const home = createRoot();
+    writeConfig(home, ['cc-safety-net@latest'], 'plugins');
 
     const detection = detect(contextFor(home));
 

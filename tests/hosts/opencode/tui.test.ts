@@ -10,7 +10,7 @@ import {
   readInteractionResponse,
   writeInteractionRequest,
 } from '@/core/interaction/protocol';
-import { createTuiController, formatBlockedCall, type TuiApi } from '@/hosts/opencode/tui';
+import { createTuiController, formatBlockedCall, type TuiUi } from '@/hosts/opencode/tui';
 
 const roots: string[] = [];
 
@@ -33,69 +33,67 @@ type SelectProps = {
   title: string;
   placeholder?: string;
   options: { title: string; value: InteractionDecision }[];
-  onSelect?: (option: { title: string; value: InteractionDecision }) => void;
 };
 
 function createFakeApi() {
-  let onClose: (() => void) | undefined;
-  let onSelect: ((option: { title: string; value: InteractionDecision }) => void) | undefined;
+  let resolveSelect: ((value: InteractionDecision | undefined) => void) | undefined;
   let lastProps: SelectProps | undefined;
   let clearCount = 0;
-  let replaceCount = 0;
+  let selectCount = 0;
   const api = {
     ui: {
       dialog: {
-        replace: (render: () => unknown, close?: () => void) => {
-          replaceCount += 1;
-          onClose = close;
-          render();
+        select: (props: SelectProps) => {
+          selectCount += 1;
+          lastProps = props;
+          return new Promise((resolve) => {
+            resolveSelect = resolve;
+          });
         },
         clear: () => {
           clearCount += 1;
-          onClose = undefined;
         },
       },
-      DialogSelect: (props: SelectProps) => {
-        lastProps = props;
-        onSelect = props.onSelect;
-        return props;
-      },
     },
-  } as unknown as TuiApi;
+  } as unknown as { ui: TuiUi };
   return {
     api,
-    pressEscape: () => onClose?.(),
-    select: (value: InteractionDecision) => onSelect?.({ title: '', value }),
+    select: (value: InteractionDecision) => resolveSelect?.(value),
+    dismiss: () => resolveSelect?.(undefined),
     clearCount: () => clearCount,
-    replaceCount: () => replaceCount,
+    selectCount: () => selectCount,
     lastProps: () => lastProps,
   };
 }
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
 describe('OpenCode interaction TUI', () => {
-  test('rejects when the dialog is dismissed with escape', () => {
+  test('rejects when the dialog is dismissed with escape', async () => {
     const environment = createEnvironment();
     seedRequest(environment, 'a');
     const fake = createFakeApi();
     const controller = createTuiController(fake.api, environment, 1_000_000);
 
-    fake.pressEscape();
+    fake.dismiss();
+    await flush();
 
     expect(readInteractionResponse(environment, 'a')).toBe('reject');
     controller.dispose();
   });
 
-  test('returns the decision chosen from the dialog', () => {
+  test('returns the decision chosen from the dialog', async () => {
     const environment = createEnvironment();
     seedRequest(environment, 'a');
     const fake = createFakeApi();
     const controller = createTuiController(fake.api, environment, 1_000_000);
 
     fake.select('once');
+    await flush();
 
     expect(readInteractionResponse(environment, 'a')).toBe('once');
     controller.dispose();
@@ -126,16 +124,17 @@ describe('OpenCode interaction TUI', () => {
     controller.dispose();
   });
 
-  test('does not reopen a dismissed dialog while the request is still present', () => {
+  test('does not reopen a dismissed dialog while the request is still present', async () => {
     const environment = createEnvironment();
     seedRequest(environment, 'a');
     const fake = createFakeApi();
     const controller = createTuiController(fake.api, environment, 1_000_000);
 
-    fake.pressEscape();
+    fake.dismiss();
+    await flush();
     controller.tick();
 
-    expect(fake.replaceCount()).toBe(1);
+    expect(fake.selectCount()).toBe(1);
     controller.dispose();
   });
 
@@ -160,7 +159,7 @@ describe('OpenCode interaction TUI', () => {
     const controller = createTuiController(fake.api, environment, 1_000_000);
 
     expect(listInteractionRequests(environment)).toEqual([]);
-    expect(fake.replaceCount()).toBe(0);
+    expect(fake.selectCount()).toBe(0);
     controller.dispose();
   });
 });

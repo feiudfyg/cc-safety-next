@@ -208,7 +208,7 @@ error, so validate against it rather than guessing further fields):
 
 1. Run `cc-safety-net doctor` first. It reports the OpenCode plugin as detected,
    configured, and verified.
-2. The plugin loads from the `plugin` array in `opencode.json`/`opencode.jsonc`. This build is
+2. The plugin loads from the `plugins` array in `opencode.json`/`opencode.jsonc`. This build is
    installed from a local path or a private package; there is no `install`, `update`, or
    `uninstall` command and no network update check.
 3. After any change to the OpenCode config, run `doctor` again and confirm the OpenCode row reads

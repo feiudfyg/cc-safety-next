@@ -5,19 +5,12 @@ import { join, relative, sep } from 'node:path';
 const SOURCE_ROOT = join(import.meta.dir, '..', 'src');
 
 const THIRD_PARTY_ALLOWANCES: Record<string, readonly string[]> = {
-  'hosts/opencode/plugin.ts': ['@opencode-ai/plugin'],
-  'hosts/opencode/v2.ts': [
-    '@opencode/plugin/effect/plugin',
-    '@opencode/plugin/effect/tool',
-    '@opencode/schema/tool',
-    'effect',
-  ],
-  'entries/index.ts': ['@opencode-ai/plugin', '@opencode/plugin/effect/plugin'],
-  'entries/opencode-v2.ts': ['@opencode/plugin/effect/plugin'],
+  'hosts/opencode/server.ts': ['@opencode/plugin'],
+  'hosts/opencode/tui.ts': ['@opencode/plugin/tui'],
 };
 
 const VALUE_THIRD_PARTY_ALLOWANCES: Record<string, readonly string[]> = {
-  'hosts/opencode/v2.ts': ['@opencode/schema/tool', 'effect'],
+  'hosts/opencode/server.ts': ['@opencode/plugin'],
 };
 
 const HOST_LAYERS = ['core', 'gate', 'audit', 'hosts'];
@@ -363,10 +356,10 @@ describe('src/ architecture', () => {
     ).toEqual([]);
     expect(
       layeringViolations(
-        join(SOURCE_ROOT, 'hosts', 'opencode', 'plugin.ts'),
-        "import { Plugin } from '@opencode-ai/plugin';\n",
+        join(SOURCE_ROOT, 'hosts', 'opencode', 'tui.ts'),
+        "import { Plugin } from '@opencode/plugin/tui';\n",
       ),
-    ).toEqual(['hosts/opencode/plugin.ts imports @opencode-ai/plugin as a value']);
+    ).toEqual(['hosts/opencode/tui.ts imports @opencode/plugin/tui as a value']);
     expect(
       layeringViolations(
         join(SOURCE_ROOT, 'gui', 'activity.ts'),

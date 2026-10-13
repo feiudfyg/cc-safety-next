@@ -10,7 +10,7 @@ reordering flags does not hide it. A broken config file never blocks anything.
 
 ## Requirements
 
-- OpenCode with plugin support: `@opencode-ai/plugin` 1.18.29+ or `@opencode/plugin` 2.0.6+.
+- OpenCode v2 with plugin support (`@opencode/plugin` 2.0.6+).
 - Node.js 18 or higher for the CLI.
 - Bun to build from source.
 
@@ -23,9 +23,9 @@ bun run build
 
 ## Install into OpenCode
 
-OpenCode loads two independent plugin kinds: **server** plugins come from `opencode.json`,
-and **TUI** plugins come from a separate `tui.json`. Register this plugin in both files so
-that blocking runs on the server and the interactive override dialog runs in the TUI.
+OpenCode v2 loads plugins from the `plugins` array in `opencode.json(c)`. This package's default
+export is the server plugin and its `./tui` export is the TUI plugin, so one entry loads both — the
+guard on the server and the interactive override dialog in the terminal.
 
 Add an absolute path (or a `file://` URL) to the global config:
 
@@ -33,26 +33,20 @@ Add an absolute path (or a `file://` URL) to the global config:
 
 ```json
 {
-  "plugin": ["/absolute/path/to/cc-safety-next"]
-}
-```
-
-`~/.config/opencode/tui.json`
-
-```json
-{
-  "plugin": ["/absolute/path/to/cc-safety-next"]
+  "plugins": ["/absolute/path/to/cc-safety-next"]
 }
 ```
 
 On Windows use forward slashes, for example `"E:/CodeProjects/cc-safety-next"`. Project-level
-config (`opencode.json` and `tui.json` beside it) works the same way.
+config (`opencode.jsonc` beside the repository) works the same way.
 
-- The `opencode.json` entry is the actual guard: it blocks destructive commands and secret
-  access before a tool call runs.
-- The `tui.json` entry loads the override dialog. If you register only the server entry, every
-  block stays non-interactive and the command is simply denied.
-- Restart OpenCode after editing either file. Running instances do not pick up plugin changes.
+- The entry blocks destructive commands and secret access before a tool call runs.
+- The `./tui` export loads the override dialog. Without a live TUI, every block is non-interactive
+  and the command is simply denied.
+- Restart OpenCode after editing the config. Running instances do not pick up plugin changes.
+- To pin the shell dialect, use the object form with plugin options:
+  `{ "package": "/absolute/path/to/cc-safety-next", "options": { "shell": "posix" } }`. Otherwise the
+  plugin infers it from `SHELL` (POSIX) or defaults to PowerShell on Windows.
 
 Because the built `dist/` is loaded directly, run `bun run build` whenever you change the source.
 

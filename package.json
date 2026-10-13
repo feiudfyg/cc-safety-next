@@ -29,10 +29,6 @@
       "types": "./dist/api.d.ts",
       "import": "./dist/api.js"
     },
-    "./opencode/v2": {
-      "types": "./dist/opencode-v2.d.ts",
-      "import": "./dist/index.js"
-    },
     "./tui": {
       "types": "./dist/tui.d.ts",
       "import": "./dist/tui.js"
@@ -59,11 +55,8 @@
     "format:check": "oxfmt --check src tests scripts knip.ts .oxfmtrc.json .oxlintrc.json package.json tsconfig.json tsconfig.build.json tsconfig.gui.json assets/cc-safety-net.schema.json"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "^1.18.29",
     "@opencode/plugin": "2.0.6",
-    "@opencode/schema": "2.0.6",
     "@types/bun": "1.3.14",
-    "effect": "4.0.0-rc.112",
     "jscpd": "^5.0.14",
     "knip": "^6.32.0",
     "oxc-parser": "0.142.0",
@@ -73,13 +66,9 @@
     "typescript": "7.0.2"
   },
   "peerDependencies": {
-    "@opencode-ai/plugin": "^1.18.29",
     "@opencode/plugin": "^2.0.6"
   },
   "peerDependenciesMeta": {
-    "@opencode-ai/plugin": {
-      "optional": true
-    },
     "@opencode/plugin": {
       "optional": true
     }

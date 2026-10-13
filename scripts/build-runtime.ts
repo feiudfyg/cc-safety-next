@@ -25,6 +25,7 @@ export async function buildRuntimeBundles(outdir: string) {
     outdir,
     target: 'node',
     splitting: true,
+    external: ['@opencode/plugin', '@opencode/plugin/tui'],
     naming: {
       entry: '[dir]/[name].[ext]',
       chunk: 'chunks/[name]-[hash].[ext]',

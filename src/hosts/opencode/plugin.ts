@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
-import type { Plugin, PluginInput } from '@opencode-ai/plugin';
 import {
   type CwdDenial,
   createCwdDenial,
@@ -22,14 +21,10 @@ import {
   interactionIdentity,
   type SessionAllow,
 } from '@/core/interaction/session-allow';
-import { type BlockPrompts, DEFAULT_BLOCK_PROMPTS, loadBlockPrompts } from '@/core/prompts/block';
+import { type BlockPrompts, DEFAULT_BLOCK_PROMPTS } from '@/core/prompts/block';
 import { shouldRecordAllowedCommands } from '@/core/policy/env';
-import { ensureSettingsFile, getInteractionConfig } from '@/core/settings';
-import {
-  getCommandFromToolInput,
-  getNonCommandToolInputKind,
-  ToolInputLimitError,
-} from '@/core/tool-input';
+import { getInteractionConfig } from '@/core/settings';
+import { getCommandFromToolInput, ToolInputLimitError } from '@/core/tool-input';
 import { isUsableDirectory } from '@/gate/intake';
 import {
   type CommandToolKind,
@@ -40,55 +35,12 @@ import {
 import { type GuardDependencies, GuardEvaluationError } from '@/gate/pipeline';
 import { writeIntegrationDenialAudit } from '@/hosts/audit';
 import { describeBlockReason } from '@/hosts/opencode/block-reason';
-import { loadBuiltinCommands } from '@/hosts/opencode/builtin-commands/commands';
 import { evaluateRuntimeGuard } from '@/hosts/runtime';
-
-type CCSafetyNetPluginInput = PluginInput & {
-  homeDir?: string;
-};
 
 const POWERSHELL_EXECUTABLES = new Set(['powershell', 'pwsh']);
 const POSIX_EXECUTABLES = new Set(['bash', 'dash', 'ksh', 'sh', 'zsh']);
 const TUI_HEARTBEAT_MAX_AGE_MS = 15_000;
 const INTERACTION_POLL_MS = 250;
-
-export function createCCSafetyNetPlugin(guardDependencies: Partial<GuardDependencies> = {}) {
-  return (async ({ directory, homeDir }: CCSafetyNetPluginInput) => {
-    const configCwd = resolve(directory);
-    const environment = createEnvironment(homeDir);
-    ensureSettingsFile(environment);
-    const blockPrompts = loadBlockPrompts(environment);
-    const sessionAllow = createSessionAllow();
-    let currentConfig: Record<string, unknown> | undefined;
-
-    return {
-      config: async (opencodeConfig: Record<string, unknown>) => {
-        currentConfig = opencodeConfig;
-        const builtinCommands = loadBuiltinCommands(environment);
-        const existingCommands = (opencodeConfig.command as Record<string, unknown>) ?? {};
-
-        opencodeConfig.command = {
-          ...builtinCommands,
-          ...existingCommands,
-        };
-      },
-
-      'tool.execute.before': async (input, output) => {
-        await evaluateOpenCodeTool({
-          configCwd,
-          homeDir,
-          tool: input.tool,
-          sessionID: input.sessionID,
-          toolInput: output.args,
-          route: getOpenCodeToolRoute(input.tool, resolveOpenCodeShellRoute(currentConfig?.shell)),
-          blockPrompts,
-          sessionAllow,
-          guardDependencies,
-        });
-      },
-    };
-  }) satisfies Plugin;
-}
 
 function createEnvironment(homeDir: string | undefined) {
   return homeDir === undefined
@@ -259,11 +211,6 @@ export function resolveOpenCodeShellRoute(
   if (POWERSHELL_EXECUTABLES.has(executable)) return 'powershell';
   if (POSIX_EXECUTABLES.has(executable)) return 'posix';
   return 'auto';
-}
-
-function getOpenCodeToolRoute(toolName: string, shell: CommandToolKind): ToolRoute {
-  if (toolName === 'bash') return { kind: 'command', shell };
-  return { kind: getNonCommandToolInputKind(toolName) };
 }
 
 function resolveOpenCodeExecutionCwd(

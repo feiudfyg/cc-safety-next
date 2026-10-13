@@ -1,7 +1,2 @@
-import type { Plugin } from '@opencode-ai/plugin';
-export declare const CCSafetyNetPlugin: Plugin;
-declare const plugin: {
-    id: string;
-    server: Plugin;
-};
-export default plugin;
+declare const _default: import("@opencode/plugin/promise/plugin").Plugin;
+export default _default;
