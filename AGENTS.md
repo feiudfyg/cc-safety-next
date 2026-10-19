@@ -1,6 +1,6 @@
 - Run focused tests during development, including the failing and passing tests required by Red-Green TDD.
-- After all implementation changes, run `bun run check`. This is the required final check for lint, code comments, formatting, typecheck, and tests. Do not run its components separately as additional final checks.
-- Ignore the dist folder; it is committed and rebuilt with `bun run build` when source changes.
+- After all implementation changes, run `pnpm run check`. This is the required final check for lint, code comments, formatting, typecheck, and tests. Do not run its components separately as additional final checks.
+- Ignore the dist folder; it is committed and rebuilt with `pnpm run build` when source changes.
 - Keep implementation modular; put tests in `tests/` mirroring `src/`, not colocated in `src/`.
 
 ## Stacked PRs
@@ -9,7 +9,7 @@
   `gh stack submit --auto --open`.
 - `dist/` is committed and must match `src/`, but a rebase replays the old build output.
   When `gh stack rebase` stops, resolve and `git add` the source files, never hand-merge `dist/`:
-  run `bun run build && git add -A dist`, then `gh stack rebase --continue`.
+  run `pnpm run build && git add -A dist`, then `gh stack rebase --continue`.
 
 ## Testing
 
@@ -56,7 +56,7 @@ rules governs all code: machinery exists to stop a demonstrated failure, not an 
 - A fact about an external tool that code cannot express stays only when the maintainer adds it to
   `scripts/comment-allowlist.json`. Never add entries there yourself, just as you never add
   `ignoreIssues` entries to `knip.ts`. Deleting an entry whose comment is gone is fine.
-- `bun run lint:comments`, part of `bun run check`, enforces this.
+- `pnpm run lint:comments`, part of `pnpm run check`, enforces this.
 
 ## Knip
 

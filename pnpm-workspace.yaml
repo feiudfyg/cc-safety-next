@@ -1,0 +1,4 @@
+shellEmulator: true
+allowBuilds:
+  msgpackr-extract: false
+  protobufjs: false

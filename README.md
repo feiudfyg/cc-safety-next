@@ -4,57 +4,103 @@
 > (`@local/cc-safety-net`). It is not published to npm, is not affiliated with the upstream
 > project, and does not check for or fetch updates from any upstream service.
 
-CC Safety Net blocks destructive commands and access to secrets such as SSH keys and `.env`
-files before the tool call runs. It parses what the command does, so wrapping the command or
-reordering flags does not hide it. A broken config file never blocks anything.
+CC Safety Net blocks destructive commands and secret access before a tool call runs. It parses
+what the command does, so wrapping the command or reordering flags does not hide it. Built-in
+protections always apply; custom rules can only add restrictions.
 
 ## Requirements
 
 - OpenCode v2 with plugin support (`@opencode/plugin` 2.0.6+).
-- Node.js 18 or higher for the CLI.
-- Bun to build from source.
+- Node.js 18 or higher for the CLI and the library API.
+- pnpm 12.14.0 for dependencies (pinned in `package.json`).
+- Bun 1.4.2 for building and running the test suite (pinned in `.bun-version`).
 
-## Build
+## Install
+
+This package is installed from a local checkout. For a step-by-step runbook written for another
+LLM or automated installer, see [docs/llm-install.md](docs/llm-install.md).
+
+### 1. Build
 
 ```bash
-bun install
-bun run build
+pnpm install --frozen-lockfile
+pnpm run build
 ```
 
-## Install into OpenCode
+The build writes `dist/`. OpenCode loads the built entrypoints, not the TypeScript sources.
 
-OpenCode v2 loads plugins from the `plugins` array in `opencode.json(c)`. This package's default
-export is the server plugin and its `./tui` export is the TUI plugin, so one entry loads both — the
-guard on the server and the interactive override dialog in the terminal.
+### 2. Register the plugin with OpenCode
 
-Add an absolute path (or a `file://` URL) to the global config:
-
-`~/.config/opencode/opencode.json`
+OpenCode v2 reads local plugins from the `plugins` array in `opencode.json(c)`. Add the built
+`dist` directory as an absolute path:
 
 ```json
 {
-  "plugins": ["/absolute/path/to/cc-safety-next"]
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": ["/absolute/path/to/cc-safety-next/dist"]
 }
 ```
 
-On Windows use forward slashes, for example `"E:/CodeProjects/cc-safety-next"`. Project-level
-config (`opencode.jsonc` beside the repository) works the same way.
+On Windows, use forward slashes:
 
-- The entry blocks destructive commands and secret access before a tool call runs.
-- The `./tui` export loads the override dialog. Without a live TUI, every block is non-interactive
-  and the command is simply denied.
-- Restart OpenCode after editing the config. Running instances do not pick up plugin changes.
-- To pin the shell dialect, use the object form with plugin options:
-  `{ "package": "/absolute/path/to/cc-safety-next", "options": { "shell": "posix" } }`. Otherwise the
-  plugin infers it from `SHELL` (POSIX) or defaults to PowerShell on Windows.
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": ["E:/CodeProjects/cc-safety-next/dist"]
+}
+```
 
-Because the built `dist/` is loaded directly, run `bun run build` whenever you change the source.
+The default export of `dist/index.js` is the guard plugin, and `dist/tui.js` provides the override
+dialog. One entry loads both.
+
+Point the entry at `dist`, not at the repository root and not at a file inside it. OpenCode
+resolves a configured plugin directory through its `index.*` entrypoint; the repository root has
+no `index.*`, while `dist/` does.
+
+The global config lives at `~/.config/opencode/opencode.json` or `.jsonc` (on Windows,
+`%USERPROFILE%\.config\opencode\opencode.json`). A project can instead use `opencode.json(c)` or
+`.opencode/opencode.json(c)` in the project root. `OPENCODE_CONFIG_DIR` overrides the global
+directory.
+
+Optional plugin options can pin the shell dialect:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    {
+      "package": "/absolute/path/to/cc-safety-next/dist",
+      "options": { "shell": "posix" }
+    }
+  ]
+}
+```
+
+`shell` must be `posix` or `powershell`. When omitted it defaults to `powershell` on Windows and
+`posix` elsewhere. Set it to match the shell OpenCode actually uses; a mismatch makes the plugin
+reject shell calls with a configuration error.
+
+Restart OpenCode after editing the config. If OpenCode runs as a background service, run
+`opencode service restart`.
+
+### 3. Verify
+
+```bash
+opencode plugin list
+node dist/bin/cc-safety-net.js doctor --skip-update-check
+node dist/bin/cc-safety-net.js status
+node dist/bin/cc-safety-net.js explain "git reset --hard"
+```
+
+`opencode plugin list` should show `cc-safety-net` with its source under `dist/index.js`. In an
+active session, the `/cc-safety-net` command is also available.
 
 ## Configuration
 
-The plugin keeps its config in `~/.cc-safety-net` (override the directory with
-`CC_SAFETY_NET_HOME`). `settings.json` is generated on first run with `temp_dir` and
-`prompts_dir`:
+### Settings
+
+The plugin keeps its settings in `~/.cc-safety-net/settings.json`. `CC_SAFETY_NET_HOME` overrides
+the directory. The file is created on first run with `temp_dir` and `prompts_dir`:
 
 ```json
 {
@@ -63,7 +109,7 @@ The plugin keeps its config in `~/.cc-safety-net` (override the directory with
 }
 ```
 
-Two optional keys can be added by hand:
+Optional keys:
 
 ```json
 {
@@ -72,77 +118,127 @@ Two optional keys can be added by hand:
 }
 ```
 
-- `temp_dir` — where scratch files and the block-interaction queue live.
-- `prompts_dir` — resolved relative to `~/.cc-safety-net`.
-- `interaction` — set to `false` to disable the interactive override dialog.
+- `temp_dir` — scratch files and the block-interaction queue.
+- `prompts_dir` — prompt files, resolved relative to `~/.cc-safety-net`.
+- `interaction` — set to `false` to disable the override dialog.
 - `interaction_timeout_seconds` — how long a block waits for an answer before it stays blocked.
 
-Every agent-facing message is a Markdown file under `prompts/`: the block headers, the intent
-footers, the working-directory reasons, the rulebook guide (`rule-doc.md`), and the
-`/cc-safety-net` command text. Each file is seeded with its default text and can be edited; an
-empty file falls back to the default.
+Every agent-facing message is a Markdown file under `prompts/`: block headers, intent footers,
+working-directory reasons, the rulebook guide (`rule-doc.md`), and the `/cc-safety-net` command
+text. Each file is seeded with its default text and can be edited; an empty file falls back to the
+default.
 
-## Interactive override
+### Policy
 
-When a command is blocked and a TUI is running, the plugin shows a dialog whose header names the
-specific rule that fired (for example, a forced `git checkout` or a protected `.git` path) and,
-under it, the blocked call shortened to one line. The options are:
+Two policy files are layered, project on top of user:
 
-- **Allow once** — allow this call one time.
-- **Allow for this session** — allow identical blocks for the rest of the session.
-- **Reject** — keep blocking.
+- `~/.cc-safety-net/policy.json` — user scope, all projects.
+- `<project>/.cc-safety-net/policy.json` — project scope, committed with the repository.
 
-Without a live TUI, or with `interaction` disabled, the command is blocked as usual.
+The policy sets the safety level, per-feature toggles, per-rule overrides, path lists, worktree
+mode, and audit retention. Edit it through `cc-safety-net gui`, or prepare a proposal and validate
+it with `cc-safety-net policy check` before applying it with `cc-safety-net policy apply`.
+`cc-safety-net status` shows the effective policy and flags a project policy that weakens the
+user policy.
 
-## Safety presets
+Safety levels:
 
-| Preset | Effect |
-|---|---|
-| Standard | Blocks recognizable destructive Git and filesystem commands. Allows metadata-only checks of built-in sensitive paths while continuing to block content access. Recommended for normal coding. |
-| Strict | Standard, plus blocks dynamic or unparseable commands the analyzer cannot verify safely. Also blocks metadata-only discovery of built-in sensitive paths. Occasional false positives on advanced shell. |
-| Paranoid | Strict, plus blocks `rm -rf` inside your project and interpreter one-liners. Expect friction; for untrusted agents or high-stakes repos. |
+| Level      | Effect                                                                                                                                |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `standard` | Default. Baseline destructive-command and secret protections, including Git metadata and protected paths.                             |
+| `strict`   | Standard, plus fail-closed rules that block dynamic or unverifiable command targets and structures the analyzer cannot verify safely. |
+| `paranoid` | Strict, plus recursive-force removal of non-temp paths (including inside the project) and interpreter one-liners.                     |
 
-Set a preset from the GUI (`... gui`, then Policy).
+Set the level in the policy, or request a level for one session with `CC_SAFETY_NET_LEVEL`; the
+stricter of the two wins.
 
-To allow one file name you manage at any depth under a folder, add an entry such as
+To allow one file name at any depth under a folder, add an entry such as
 `"~/code/**/.env.local"` to `secret_protection.allow_paths` in your user policy. Other env
-variants stay blocked. The folder before `**/` is required and cannot be your home directory or
-a folder above it, so home credentials such as `~/.ssh` and `~/.npmrc` stay protected. Only a
+variants stay blocked. The folder before `**/` is required and cannot be your home directory or a
+folder above it, so home credentials such as `~/.ssh` and `~/.npmrc` stay protected. Only a
 folder, `**/`, and an exact file name are supported; configured deny paths still win.
 
-## CLI
+### Rulebooks
 
-Run the built CLI from the repository:
+Rule config files list rulebook sources; rule definitions live in `rulebook.json`, not directly in
+`rule.json`.
 
-```bash
-# Summarize what is being enforced right now
-node dist/bin/cc-safety-net.js status
-# Verify the installation and run a self-test
-node dist/bin/cc-safety-net.js doctor
-# Trace how a command is analyzed step-by-step
-node dist/bin/cc-safety-net.js explain "git reset --hard"
-# Browse recorded denials from the audit trail (add --all to include allowed commands)
-node dist/bin/cc-safety-net.js logs
-# Print the rulebook authoring guide
-node dist/bin/cc-safety-net.js rule doc
-# Review and edit your policy in a local web GUI
-node dist/bin/cc-safety-net.js gui
-```
+- User rule config: `~/.cc-safety-net/rules/rule.json`.
+- Project rule config: `<project>/.cc-safety-net/rules/rule.json`.
+- Rulebook files: `<rules dir>/<rulebook-name>/rulebook.json`.
 
-`doctor`, `explain`, and `logs` support `--json` for machine-readable output. The audit trail
-stays on your machine. It records command decisions, but not command output or prompts.
-
-## Rulebooks
-
-Rulebooks add blocks. A rulebook can only add blocks; it cannot turn built-in protection off.
-Add a GitHub source and sync it:
+A rulebook can only add blocks; it cannot turn built-in protection off. Rulebooks are read on
+every tool call, so a saved edit applies to the next command. Add a GitHub source and sync it:
 
 ```bash
 node dist/bin/cc-safety-net.js rule add acme/safety-rules --only aws gcloud
 ```
 
-`rule init`, `add`, `remove`, `update`, `list`, `verify`, `migrate`, and `wrapper` manage the
-rest. See `rule --help`.
+`rule init`, `add`, `remove`, `update`, `list`, `wrapper`, `migrate`, `doc`, and `verify` cover
+the rest. Treat `cc-safety-net rule doc` as the authoritative schema and path reference.
+
+### Environment variables
+
+| Variable                                         | Effect                                                                |
+| ------------------------------------------------ | --------------------------------------------------------------------- |
+| `CC_SAFETY_NET_LEVEL=standard\|strict\|paranoid` | Session safety level; the stricter of this and the policy level wins. |
+| `CC_SAFETY_NET_WORKTREE=1`                       | Allow local Git discards in linked worktrees.                         |
+| `CC_SAFETY_NET_DEBUG=1`                          | Print diagnostic messages to stderr.                                  |
+| `CC_SAFETY_NET_AUDIT_SCOPE=all\|blocked`         | Record all command decisions, or denials only. The default is `all`.  |
+| `CC_SAFETY_NET_HOME`                             | Override the `~/.cc-safety-net` config directory.                     |
+| `CC_SAFETY_NET_NO_INTERACTION`                   | Disable the interactive override dialog.                              |
+
+Legacy variables are still supported: `CC_SAFETY_NET_STRICT=1`,
+`CC_SAFETY_NET_PARANOID=1`, `CC_SAFETY_NET_PARANOID_RM=1`, and
+`CC_SAFETY_NET_PARANOID_INTERPRETERS=1`.
+
+## Interactive override
+
+When a command is blocked and a TUI is running, the plugin shows a dialog whose header names the
+rule that fired, with the blocked call shortened to one line. The options are:
+
+- **Allow once** — allow this call one time.
+- **Allow for this session** — allow identical blocks for the rest of the session.
+- **Reject** — keep blocking.
+
+Without a live TUI, with `interaction` disabled in `settings.json`, or with
+`CC_SAFETY_NET_NO_INTERACTION` set, the command stays blocked.
+
+## CLI
+
+Run the built CLI from the checkout with Node:
+
+```bash
+node dist/bin/cc-safety-net.js status
+node dist/bin/cc-safety-net.js doctor
+node dist/bin/cc-safety-net.js explain "git reset --hard"
+node dist/bin/cc-safety-net.js logs
+node dist/bin/cc-safety-net.js rule doc
+node dist/bin/cc-safety-net.js gui
+```
+
+| Command   | Purpose                                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------------------- |
+| `status`  | Show what the runtime is enforcing right now.                                                              |
+| `doctor`  | Run diagnostic checks for the installation and configuration. Supports `--json` and `--skip-update-check`. |
+| `logs`    | Browse the local audit trail. Supports `--json`, filters, `--all`, and `--prune-legacy`.                   |
+| `explain` | Print the step-by-step analysis of a command without executing it. Supports `--json` and `--cwd`.          |
+| `rule`    | Manage rule config and rulebook sources; `rule doc` prints the authoring guide.                            |
+| `policy`  | Validate and apply policy proposals.                                                                       |
+| `gui`     | Open the local policy editor; `--no-open` prints the URL.                                                  |
+
+`explain` exits 0 for both allowed and blocked verdicts; read the verdict from the output. The
+audit trail stays on your machine. It records command decisions, not command output or prompts.
+
+To run the CLI as `cc-safety-net` instead of the Node path, link the checkout globally with
+`pnpm link --global` (the global pnpm bin directory must be on `PATH`).
+
+## The `/cc-safety-net` command
+
+When the plugin is active, it registers a `/cc-safety-net` command. The command prompt embeds the
+operator skill in `skills/cc-safety-net/SKILL.md`, so it can explain why a command was blocked,
+triage a false positive, configure rulebooks, change the policy or safety level, and diagnose
+protection. The command prompt is only used when invoked.
 
 ## Library API
 
@@ -159,27 +255,35 @@ if (result.kind !== 'allow') {
 
 `cwd` must be an absolute directory path. If `checkCommand` throws, do not run the command.
 
-## The `/cc-safety-net` command
+## Development
 
-The OpenCode integration builds in a `/cc-safety-net` command backed by the skill in
-`skills/cc-safety-net/SKILL.md`. Ask it why a command was blocked, whether a block was wrong,
-how to write or migrate custom rules, how to change the policy or safety level, or whether
-protection is working. It loads only when invoked, so it takes no context-window space until
-you type the command.
+```bash
+pnpm install --frozen-lockfile
+pnpm run build
+pnpm run check
+```
+
+- `pnpm run check` runs lint, comment policy, formatting, typecheck, and the Bun test suite.
+- `pnpm run test:coverage` writes coverage; `pnpm run verify:coverage` enforces the threshold.
+- `dist/` is committed and must match `src/`. Rebuild it with `pnpm run build` after source
+  changes; never hand-edit build output.
+- Tests live in `tests/` and mirror `src/`. Bun-specific APIs and `bun:test` are intentional.
+- The Bun version is pinned in `.bun-version`; `scripts/project-bun.ts` launches that version for
+  the build.
 
 ## Limitations
 
 CC Safety Net denies a tool call before it runs. It does not set filesystem permissions, watch
 network egress, or contain a process.
 
-The policy and secret-path extractors are mostly POSIX. For PowerShell they resolve a home
-prefix (`$HOME`, `$env:USERPROFILE`, `$env:HOME`, or `~`) joined to a literal suffix with `\` or
-`/`. The same check applies to `Get-Content`, `Set-Content`, `Add-Content`, `Copy-Item`,
-`Move-Item`, `Remove-Item`, and their aliases. `Get-Content $HOME\.ssh\id_rsa` is denied. A path
-built by concatenation, a subexpression, or `Join-Path` is not.
+Policy and secret-path extraction are mostly POSIX. For PowerShell they resolve a home prefix
+(`$HOME`, `$env:USERPROFILE`, `$env:HOME`, or `~`) joined to a literal suffix with `\` or `/`.
+The same check applies to `Get-Content`, `Set-Content`, `Add-Content`, `Copy-Item`, `Move-Item`,
+`Remove-Item`, and their aliases. `Get-Content $HOME\.ssh\id_rsa` is denied. A path built by
+concatenation, a subexpression, or `Join-Path` is not.
 
-Policy-file protection matches exact paths. It does not emulate commands. Use OS permissions or
-a sandbox when you need that.
+Policy-file protection matches exact paths. It does not emulate commands. Use OS permissions or a
+sandbox when you need that.
 
 ## License
 
