@@ -127,6 +127,7 @@ type ReadFlags = {
 
 type ReadContext = {
   readonly source: string;
+  readonly originalSource: string;
   readonly suppressed: ReadonlySet<CommandSpan>;
   readonly flags: ReadFlags;
   readonly depth: number;
@@ -139,10 +140,7 @@ type QuoteState = { single: boolean; double: boolean };
 type PositionedEvents = { readonly start: number; readonly events: readonly GuardEvent[] };
 
 export function readGuardSyntax(source: string, program: CommandProgram): GuardSyntax {
-  const suppressed =
-    program.status === 'complete'
-      ? new Set(collectDataSinkHeredocSpans(program))
-      : new Set<CommandSpan>();
+  const suppressed = new Set(collectDataSinkHeredocSpans(program));
   const masked = maskSpans(source, suppressed);
   if (hasUnclosedQuotes(masked)) return freezeSyntax('unclosed-quote', masked, program);
   const flags: ReadFlags = {
@@ -153,6 +151,7 @@ export function readGuardSyntax(source: string, program: CommandProgram): GuardS
   };
   const events = readProgram(program, {
     source: masked,
+    originalSource: source,
     suppressed,
     flags,
     depth: 0,
@@ -369,6 +368,44 @@ function maskSpans(source: string, spans: ReadonlySet<CommandSpan>): string {
   );
 }
 
+function maskHeredocDataBody(body: string): string | undefined {
+  const program = parseCommand(body, 'posix');
+  if (program.status !== 'complete') return undefined;
+  return collectCommandSubstitutionSpans(program).reduce(
+    (masked, span) =>
+      masked.slice(0, span.start) + body.slice(span.start, span.end) + masked.slice(span.end),
+    ' '.repeat(body.length),
+  );
+}
+
+function collectCommandSubstitutionSpans(program: CommandProgram): CommandSpan[] {
+  return program.nodes.flatMap((node) => {
+    if (node.kind === 'command') {
+      const words = [
+        ...node.words,
+        ...node.redirections.flatMap((redirection) =>
+          redirection.target === undefined ? [] : [redirection.target],
+        ),
+      ];
+      return [
+        ...words.flatMap((word) =>
+          word.parts
+            .filter(
+              (part) =>
+                part.provenance === 'command-substitution' || part.provenance === 'arithmetic',
+            )
+            .map((part) => part.span),
+        ),
+        ...node.nested.flatMap(collectCommandSubstitutionSpans),
+      ];
+    }
+    if (node.kind === 'group' || node.kind === 'function') {
+      return collectCommandSubstitutionSpans(node.body);
+    }
+    return [];
+  });
+}
+
 function freezeSyntax(
   status: GuardSyntax['status'],
   source: string,
@@ -550,7 +587,14 @@ function readHeredocs(
           : []),
       ];
       if (context.suppressed.has(heredoc.bodySpan)) {
-        return [{ start: heredoc.bodySpan.start, events: terminator }];
+        const body = context.originalSource.slice(heredoc.bodySpan.start, heredoc.bodySpan.end);
+        const dataBody = heredoc.quotedDelimiter ? undefined : (maskHeredocDataBody(body) ?? body);
+        return [
+          {
+            start: heredoc.bodySpan.start,
+            events: [...(dataBody === undefined ? [] : readText(dataBody, context)), ...terminator],
+          },
+        ];
       }
       return [
         {
@@ -606,6 +650,7 @@ function readText(text: string, context: ReadContext): GuardEvent[] {
   };
   const events = readProgram(program, {
     source: text,
+    originalSource: text,
     suppressed: new Set<CommandSpan>(),
     flags,
     depth: context.depth + 1,
@@ -937,7 +982,7 @@ function isCodeInterpreterHeredocConsumer(view: CommandView): boolean {
 }
 
 function collectDataSinkHeredocSpans(program: CommandProgram): CommandSpan[] {
-  return program.nodes.flatMap((node, index): CommandSpan[] => {
+  return program.nodes.flatMap((node): CommandSpan[] => {
     if (node.kind === 'group' || node.kind === 'function') {
       return collectDataSinkHeredocSpans(node.body);
     }
@@ -947,10 +992,13 @@ function collectDataSinkHeredocSpans(program: CommandProgram): CommandSpan[] {
       redirection.heredoc?.quotedDelimiter ? [redirection.heredoc.bodySpan] : [],
     );
     if (isCodeInterpreterHeredocConsumer(node)) return [...nestedSpans, ...quotedBodies];
-    const next = program.nodes[index + 1];
-    const piped = next?.kind === 'connector' && (next.operator === '|' || next.operator === '|&');
-    if (piped || !isDataSinkHeredocConsumer(node)) return nestedSpans;
-    return [...nestedSpans, ...quotedBodies];
+    if (!isDataSinkHeredocConsumer(node)) return nestedSpans;
+    return [
+      ...nestedSpans,
+      ...node.redirections.flatMap((redirection) =>
+        redirection.heredoc ? [redirection.heredoc.bodySpan] : [],
+      ),
+    ];
   });
 }
 

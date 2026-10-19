@@ -205,12 +205,12 @@ describe('gate/guards/guard-walk', () => {
     }
   });
 
-  test('a heredoc body is read as its own segments, and its fallbacks are reported', () => {
+  test('a data-sink heredoc body is data, and its fallbacks are reported', () => {
     expect(segments('cat <<EOF\ncat .env\nEOF')).toStrictEqual([
       `segment ["cat"] cwd=${workspace} pipe=null boundary=;`,
-      `segment ["cat",".env"] cwd=${workspace} pipe=null boundary=;`,
       `segment ["EOF"] cwd=${workspace} pipe=null boundary=null`,
     ]);
+    expect(words('cat <<EOF\ncat .env\nEOF')).not.toContain('.env');
     expect(words("cat <<'EOF'\ncat .env\nEOF")).not.toContain('.env');
     expect(read("cat <<'EOF'\ncat .env\nEOF").source).not.toContain('.env');
     expect(words("bash <<'EOF'\ncat .env\nEOF")).toContain('.env');

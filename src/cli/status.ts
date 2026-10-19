@@ -13,7 +13,9 @@ export function printStatus(environment: Environment): void {
   const modes = getCCSafetyNetEnvModes(policy, environment.env);
   const asciiOnly = !!process.env.NO_COLOR || !process.stdout.isTTY;
 
-  const width = Math.min(process.stdout.columns || 80, 100);
+  const width = process.stdout.isTTY
+    ? Math.min(process.stdout.columns || 80, 100)
+    : Number.MAX_SAFE_INTEGER;
   const on = asciiOnly ? 'ok' : '✔';
   const off = asciiOnly ? 'OFF' : '✘';
 

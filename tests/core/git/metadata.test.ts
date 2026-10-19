@@ -25,22 +25,16 @@ function commitAll(repository: string, message: string): void {
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'next-git-metadata-'));
 
-  const submodule = join(root, 'sub');
-  mkdirSync(submodule);
-  runGit(['init', '-q'], submodule);
-  writeFileSync(join(submodule, 'lib.txt'), 'lib\n');
-  commitAll(submodule, 'lib');
-
   const main = join(root, 'main');
   mkdirSync(main);
   runGit(['init', '-q'], main);
   writeFileSync(join(main, 'file.txt'), 'main\n');
   commitAll(main, 'main');
-  runGit(
-    ['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', '../sub', 'vendor/sub'],
-    main,
-  );
-  commitAll(main, 'add submodule');
+
+  const submoduleWorktree = join(main, 'vendor', 'sub');
+  mkdirSync(submoduleWorktree, { recursive: true });
+  mkdirSync(join(main, '.git', 'modules', 'vendor', 'sub'), { recursive: true });
+  writeFileSync(join(submoduleWorktree, '.git'), 'gitdir: ../../.git/modules/vendor/sub\n');
   mkdirSync(join(main, 'nested'));
   runGit(['worktree', 'add', '-q', '-b', 'feature/linked', join(root, 'linked')], main);
   mkdirSync(join(root, 'linked', 'inner'));
